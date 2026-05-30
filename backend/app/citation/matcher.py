@@ -81,8 +81,8 @@ def match(
 
     for cit in numeric_citations:
         for n in cit.numbers:
-            ref = ref_by_number.get(n)
-            if ref is None:
+            numbered_ref = ref_by_number.get(n)
+            if numbered_ref is None:
                 issues.append(
                     MatchIssue(
                         type="orphan_citation",
@@ -95,14 +95,12 @@ def match(
                     )
                 )
             else:
-                matched_reference_indices.add(ref.index)
+                matched_reference_indices.add(numbered_ref.index)
 
     # --- author-year styles ---
     for cit in name_citations:
         candidates = [
-            ref
-            for ref in references
-            if _first_author_matches(cit, ref, threshold)
+            ref for ref in references if _first_author_matches(cit, ref, threshold)
         ]
         if not candidates:
             issues.append(
@@ -119,7 +117,7 @@ def match(
             continue
 
         year_match = [r for r in candidates if cit.year is not None and r.year == cit.year]
-        chosen = year_match[0] if year_match else candidates[0]
+        chosen: ReferenceItem = year_match[0] if year_match else candidates[0]
         matched_reference_indices.add(chosen.index)
 
         if not year_match and cit.year is not None and chosen.year is not None:

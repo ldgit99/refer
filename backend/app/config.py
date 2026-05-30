@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     langsmith_tracing: bool = False
     redis_url: str = "redis://localhost:6379/0"
 
+    # F3 (external metadata verification). Disable to keep the pipeline offline
+    # (tests, air-gapped demos). When enabled, references are checked against
+    # Crossref/OpenAlex live.
+    f3_enabled: bool = True
+
     # --- model routing (research.md §7.7) ---
     model_trivial: str = "claude-haiku-4-5"
     model_semantic: str = "claude-sonnet-4-6"

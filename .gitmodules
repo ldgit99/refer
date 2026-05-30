@@ -1,0 +1,3 @@
+[submodule "backend/vendor/hwpx-skill"]
+	path = backend/vendor/hwpx-skill
+	url = https://github.com/jkf87/hwpx-skill

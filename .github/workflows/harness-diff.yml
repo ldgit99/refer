@@ -1,0 +1,38 @@
+name: harness-diff
+
+# plan.md M7 §4: warn (do not block) when the agent catalog in
+# backend/app/agents drifts from the documented specialist/critic roster in
+# research.md §7.3. This is a design-drift smoke check, not a hard gate.
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/agents/**"
+      - "research.md"
+      - ".github/workflows/harness-diff.yml"
+  workflow_dispatch:
+
+jobs:
+  catalog-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check critic roster present
+        run: |
+          set -e
+          missing=0
+          for fn in citation_auditor apa_style_critic evidence_critic consistency_auditor; do
+            if ! grep -q "def ${fn}" backend/app/agents/critics.py; then
+              echo "::warning::critic '${fn}' missing from backend/app/agents/critics.py"
+              missing=1
+            fi
+          done
+          for sym in ParserAgent CitationExtractorAgent ReferenceParserAgent MatcherAgent FormatterAgent VerifierAgent DocumentWriterAgent; do
+            if ! grep -q "$sym" research.md; then
+              echo "::warning::specialist '${sym}' not documented in research.md"
+            fi
+          done
+          if [ "$missing" = "1" ]; then
+            echo "::warning::Agent catalog drift detected — review research.md §7.3."
+          fi
+          echo "harness-diff check complete (non-blocking)."

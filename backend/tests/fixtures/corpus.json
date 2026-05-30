@@ -1,0 +1,114 @@
+{
+  "_comment": "Regression corpus (plan.md M7 §5). Each case is a synthetic paper expressed as ordered paragraphs plus the expected F1 MatchReport stats. Real binary KCI/SCI fixtures can be dropped into this directory and registered the same way; the runner builds an in-memory DOCX from `paragraphs`. Covers: KO author-year, EN author-year, numeric/IEEE, year mismatch, et al. violation, orphan citation, orphan reference, Hanja-mixed Korean.",
+  "cases": [
+    {
+      "id": "ko-clean",
+      "lang": "ko",
+      "paragraphs": [
+        "본 연구는 학습분석 도구를 검토한다 (이동국, 2024).",
+        "또한 김철수(2023)의 연구도 참고하였다.",
+        "참고문헌",
+        "이동국 (2024). 학습분석 기반 피드백. 교육공학연구, 40(1), 1-20.",
+        "김철수 (2023). 적응형 학습. 한국교육, 51(2), 33-50."
+      ],
+      "expected": { "citations": 2, "references": 2, "orphan_citation": 0, "orphan_reference": 0 }
+    },
+    {
+      "id": "en-clean",
+      "lang": "en",
+      "paragraphs": [
+        "Prior work shows strong effects (Kim, 2023).",
+        "Lee and Park (2024) extended this.",
+        "References",
+        "Kim, S. (2023). A study of feedback. Journal of EdTech, 12(1), 1-10.",
+        "Lee, J., & Park, H. (2024). Adaptive systems. Computers & Education, 30(2), 11-25."
+      ],
+      "expected": { "citations": 2, "references": 2, "orphan_citation": 0, "orphan_reference": 0 }
+    },
+    {
+      "id": "numeric-ieee",
+      "lang": "en",
+      "paragraphs": [
+        "Deep models improved accuracy [1], [2, 3].",
+        "References",
+        "[1] A. Author, Title one, 2019.",
+        "[2] B. Writer, Title two, 2020.",
+        "[3] C. Coder, Title three, 2021."
+      ],
+      "expected": { "citations": 2, "references": 3, "orphan_citation": 0, "orphan_reference": 0 }
+    },
+    {
+      "id": "orphan-citation",
+      "lang": "en",
+      "paragraphs": [
+        "An uncited source appears here (Ghost, 2099).",
+        "References",
+        "Kim, S. (2023). Real study. Journal, 1(1), 1-2."
+      ],
+      "expected": { "orphan_citation": 1, "orphan_reference": 1 }
+    },
+    {
+      "id": "orphan-reference",
+      "lang": "en",
+      "paragraphs": [
+        "We cite one source (Kim, 2023).",
+        "References",
+        "Kim, S. (2023). Cited. Journal, 1(1), 1-2.",
+        "Unused, A. (2000). Never cited. Journal, 9(9), 90-99."
+      ],
+      "expected": { "orphan_reference": 1 }
+    },
+    {
+      "id": "year-mismatch",
+      "lang": "en",
+      "paragraphs": [
+        "Reported earlier (Kim, 2023).",
+        "References",
+        "Kim, S. (2024). Same author other year. Journal, 1(1), 1-2."
+      ],
+      "expected": { "year_mismatch": 1 }
+    },
+    {
+      "id": "et-al-violation",
+      "lang": "en",
+      "paragraphs": [
+        "Three authors cited fully (Kim, Lee & Park, 2023).",
+        "References",
+        "Kim, S., Lee, J., & Park, H. (2023). Study. Journal, 1(1), 1-2."
+      ],
+      "expected": { "author_count_mismatch": 1 }
+    },
+    {
+      "id": "ko-hanja-mixed",
+      "lang": "ko",
+      "paragraphs": [
+        "한자 병기 사례를 본다 (홍길동, 2022).",
+        "참고문헌",
+        "홍길동(洪吉童) (2022). 漢字 倂記 연구. 국어학, 5(1), 1-15."
+      ],
+      "expected": { "citations": 1, "references": 1, "orphan_citation": 0 }
+    },
+    {
+      "id": "ko-numeric-mixed",
+      "lang": "ko",
+      "paragraphs": [
+        "선행 연구[1]와 후속 연구[2]가 있다.",
+        "참고문헌",
+        "[1] 이영희 (2021). 첫 연구. 교육, 1(1), 1-9.",
+        "[2] 박민수 (2022). 둘째 연구. 교육, 2(2), 10-19."
+      ],
+      "expected": { "citations": 2, "references": 2, "orphan_citation": 0 }
+    },
+    {
+      "id": "narrative-en",
+      "lang": "en",
+      "paragraphs": [
+        "Smith (2020) reported gains, and Brown (2021) confirmed them.",
+        "References",
+        "Smith, J. (2020). Gains. Journal, 1(1), 1-2.",
+        "Brown, K. (2021). Confirmation. Journal, 2(2), 3-4."
+      ],
+      "expected": { "citations": 2, "references": 2, "orphan_citation": 0, "orphan_reference": 0 }
+    }
+  ]
+}
