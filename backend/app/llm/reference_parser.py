@@ -11,7 +11,7 @@ from app.citation.ref_to_csl import reference_to_csl
 from app.citation.references import ReferenceItem
 from app.config import get_settings
 from app.llm.openai_client import ChatMessage, chat_json
-from app.verifier.verify import extract_doi
+from app.verifier.verify import extract_doi, normalize_doi
 
 ChatJSONFunc = Callable[[list[ChatMessage]], Awaitable[dict]]
 
@@ -81,7 +81,7 @@ def _merge_csl_item(item: CSLItem, parsed: ParsedReference) -> CSLItem:
     if parsed.confidence < MIN_PARSE_CONFIDENCE:
         return item
     authors = [CSLName(family=a) for a in parsed.authors if a.strip()] or item.author
-    doi = (parsed.doi or item.doi or "").strip().lower()
+    doi = normalize_doi(parsed.doi) or normalize_doi(item.doi) or ""
     url = parsed.url or item.url
     if not doi and url:
         doi = extract_doi(url) or ""

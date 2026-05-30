@@ -6,7 +6,7 @@ import respx
 
 from app.citation.csl import CSLItem, CSLName
 from app.verifier.crossref import CrossrefClient
-from app.verifier.verify import verify_reference
+from app.verifier.verify import extract_doi, normalize_doi, verify_reference
 
 
 def _crossref_work(title: str, family: str, year: int, doi: str) -> dict:
@@ -50,6 +50,13 @@ def _mock_doi_csl(doi: str, title: str, family: str, year: int) -> None:
     )
 
 
+def test_normalize_doi_accepts_urls_labels_and_wrappers() -> None:
+    assert normalize_doi("https://doi.org/10.3102/003465430298487") == "10.3102/003465430298487"
+    assert normalize_doi("doi:10.1000/ABC.") == "10.1000/abc"
+    assert extract_doi("(https://doi.org/10.1000/foo)") == "10.1000/foo"
+    assert extract_doi("https://doi.org/10.1000/foo(bar)") == "10.1000/foo(bar)"
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_valid_doi_verified() -> None:
@@ -75,6 +82,33 @@ async def test_valid_doi_verified() -> None:
     assert result.doi_url == f"https://doi.org/{doi}"
     assert result.doi_resolves is True
     assert result.title_matches is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_full_doi_url_in_csl_item_is_normalized_before_verification() -> None:
+    doi = "10.3102/003465430298487"
+    _mock_doi_link(doi)
+    _mock_doi_csl(doi, "The Power of Feedback", "Hattie", 2007)
+    respx.get(f"https://api.crossref.org/works/{doi}").mock(
+        return_value=httpx.Response(
+            200, json=_crossref_work("The Power of Feedback", "Hattie", 2007, doi)
+        )
+    )
+    ref = CSLItem(
+        id="r0-url",
+        title="The power of feedback",
+        author=[CSLName(family="Hattie")],
+        issued_year=2007,
+        doi=f"https://doi.org/{doi}",
+    )
+
+    async with CrossrefClient() as client:
+        result = await verify_reference(ref, client)
+
+    assert result.status == "verified"
+    assert result.doi_url == f"https://doi.org/{doi}"
+    assert result.doi_resolves is True
 
 
 @pytest.mark.asyncio

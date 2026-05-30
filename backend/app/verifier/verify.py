@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from typing import Literal
+from urllib.parse import unquote
 
 from pydantic import BaseModel
 from rapidfuzz import fuzz
@@ -30,7 +31,7 @@ VerificationStatus = Literal[
     "skipped",
 ]
 
-DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:A-Za-z0-9]+")
+DOI_RE = re.compile(r"10\.\d{4,9}/[^\s<>\"']+", re.IGNORECASE)
 
 
 class VerifiedItem(BaseModel):
@@ -46,9 +47,34 @@ class VerifiedItem(BaseModel):
     note: str = ""
 
 
+def _strip_trailing_doi_punctuation(doi: str) -> str:
+    doi = doi.strip().rstrip(".,;")
+    pairs = {")": "(", "]": "[", "}": "{"}
+    while doi and doi[-1] in pairs and doi.count(pairs[doi[-1]]) < doi.count(doi[-1]):
+        doi = doi[:-1].rstrip(".,;")
+    return doi
+
+
+def normalize_doi(text: str | None) -> str | None:
+    if not text:
+        return None
+    cleaned = unquote(str(text).strip())
+    cleaned = re.sub(r"^(?:doi\s*:?\s*)", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"^https?://(?:dx\.)?doi\.org/",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = _strip_trailing_doi_punctuation(cleaned)
+    if cleaned.lower().startswith("10."):
+        return cleaned.lower()
+    m = DOI_RE.search(cleaned)
+    return _strip_trailing_doi_punctuation(m.group(0)).lower() if m else None
+
+
 def extract_doi(text: str) -> str | None:
-    m = DOI_RE.search(text or "")
-    return m.group(0).rstrip(".,;)]}").lower() if m else None
+    return normalize_doi(text)
 
 
 def _norm_title(t: str) -> str:
@@ -94,6 +120,7 @@ async def _verify_existing_doi(
     client: CrossrefClient,
 ) -> VerifiedItem:
     settings = get_settings()
+    doi = normalize_doi(doi) or doi
     doi_url = f"https://doi.org/{doi}"
 
     doi_resolves = await client.doi_url_resolves(doi)
@@ -197,7 +224,7 @@ async def _verify_existing_doi(
 
 async def verify_reference(ref: CSLItem, client: CrossrefClient) -> VerifiedItem:
     settings = get_settings()
-    doi = ref.doi or extract_doi(ref.url) or extract_doi(ref.title)
+    doi = normalize_doi(ref.doi) or extract_doi(ref.url) or extract_doi(ref.title)
 
     if doi:
         return await _verify_existing_doi(ref, doi, client)

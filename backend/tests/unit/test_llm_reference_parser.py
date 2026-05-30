@@ -28,7 +28,7 @@ async def test_llm_reference_parser_refines_mixed_reference(monkeypatch) -> None
                     "issue": "1",
                     "page": "1-10",
                     "publisher": "",
-                    "doi": "10.1000/test",
+                    "doi": "https://doi.org/10.1000/test",
                     "url": "",
                     "confidence": 0.92,
                 }
