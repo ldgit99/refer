@@ -20,6 +20,8 @@ from app.verifier.crossref import CrossrefClient
 from app.verifier.verify import VerifiedItem, verify_reference
 from app.writers.base import ParagraphRef, Patch
 
+MAX_VERIFICATION_ERROR_LEN = 180
+
 
 class ReviewResult(BaseModel):
     match_report: MatchReport
@@ -90,7 +92,7 @@ def build_patches(
                     comment="DOI 자동 보완",
                 )
             )
-        elif v.status in {"invalid_doi", "doi_mismatch", "not_found"}:
+        elif v.status in {"invalid_doi", "doi_mismatch", "not_found", "skipped"}:
             patches.append(
                 Patch(
                     id=f"f3warn-{ref.index}",
@@ -138,6 +140,22 @@ def _f1_f2(document: ParsedDocument) -> tuple[MatchReport, list[CSLItem], dict[s
     return report, csl_items, formatted
 
 
+def _verification_failure_item(ref: CSLItem, exc: Exception) -> VerifiedItem:
+    detail = str(exc).strip() or exc.__class__.__name__
+    if len(detail) > MAX_VERIFICATION_ERROR_LEN:
+        detail = f"{detail[:MAX_VERIFICATION_ERROR_LEN].rstrip()}..."
+    doi_url = f"https://doi.org/{ref.doi}" if ref.doi else None
+    return VerifiedItem(
+        ref_id=ref.id,
+        status="skipped",
+        severity="WARNING",
+        doi_url=doi_url,
+        doi_resolves=False if ref.doi else None,
+        title_matches=False if ref.doi else None,
+        note=f"DOI verification could not be completed: {detail}",
+    )
+
+
 def review_sync(document: ParsedDocument) -> ReviewResult:
     """F1 + F2 only (no network)."""
     report, csl_items, formatted = _f1_f2(document)
@@ -180,13 +198,13 @@ async def review_with_verification(
             for c in csl_items:
                 try:
                     verified[c.id] = await verify_reference(c, cr)
-                except Exception:  # noqa: BLE001 — per-item resilience
-                    continue
+                except Exception as exc:  # noqa: BLE001 - per-item resilience
+                    verified[c.id] = _verification_failure_item(c, exc)
         finally:
             if own_client:
                 await cr.__aexit__(None, None, None)
-    except Exception:  # noqa: BLE001 — F3 is best-effort
-        verified = {}
+    except Exception as exc:  # noqa: BLE001 - F3 is best-effort
+        verified = {c.id: _verification_failure_item(c, exc) for c in csl_items}
 
     patches = build_patches(document, report, formatted, csl_items, verified)
     return ReviewResult(
