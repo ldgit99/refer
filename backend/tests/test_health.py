@@ -12,6 +12,7 @@ def test_healthz() -> None:
     assert body["status"] == "ok"
     assert "version" in body
     assert "llm_enabled" in body
+    assert "llm_provider" in body
     assert body["formats"]["docx"]["parse"] is True
     assert "hwpx" in body["formats"]
     assert body["formats"]["hwp"]["download_format"] == "hwpx"

@@ -25,6 +25,8 @@ class Settings(BaseSettings):
 
     # --- external services ---
     anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
+    llm_provider: str = "auto"
     crossref_polite_email: str | None = None
     langsmith_api_key: str | None = None
     langsmith_tracing: bool = False
@@ -39,6 +41,9 @@ class Settings(BaseSettings):
     model_trivial: str = "claude-haiku-4-5"
     model_semantic: str = "claude-sonnet-4-6"
     model_final: str = "claude-opus-4-7"
+    openai_model_trivial: str = "gpt-4.1-mini"
+    openai_model_semantic: str = "gpt-4.1"
+    openai_model_final: str = "gpt-4.1"
 
     # --- tunable thresholds (plan.md M6 §3) ---
     fuzzy_match_threshold: float = 0.85
@@ -52,8 +57,26 @@ class Settings(BaseSettings):
 
     @property
     def llm_enabled(self) -> bool:
-        """LLM critics run only when an API key is configured."""
-        return bool(self.anthropic_api_key)
+        """LLM critics run only when at least one provider API key is configured."""
+        return self.active_llm_provider is not None
+
+    @property
+    def active_llm_provider(self) -> str | None:
+        """Resolve the configured LLM provider.
+
+        ``auto`` prefers OpenAI when ``OPENAI_API_KEY`` is present, then falls
+        back to Anthropic for backward compatibility.
+        """
+        provider = self.llm_provider.lower().strip()
+        if provider == "openai":
+            return "openai" if self.openai_api_key else None
+        if provider == "anthropic":
+            return "anthropic" if self.anthropic_api_key else None
+        if self.openai_api_key:
+            return "openai"
+        if self.anthropic_api_key:
+            return "anthropic"
+        return None
 
 
 @lru_cache

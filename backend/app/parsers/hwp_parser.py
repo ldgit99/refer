@@ -1,8 +1,8 @@
-"""Legacy HWP parser (research.md §2.2, §2.5.4).
+"""Legacy HWP parser.
 
-Primary path: convert HWP → HWPX via hwpx-skill's convert_hwp.py, then delegate
-to the HWPX parser (records original_format='hwp'). The HWP→HWPX conversion is
-also the basis for the writer path (download as .hwpx).
+Primary path: convert binary HWP to HWPX via hwpx-skill's ``convert_hwp.py``,
+then delegate to the HWPX parser while preserving ``original_format='hwp'``.
+The writer path also returns HWP uploads as HWPX downloads.
 """
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ def _convert_hwp_to_hwpx(hwp_path: Path) -> Path:
     script = VENDOR_DIR / "scripts" / "convert_hwp.py"
     if not script.exists():
         raise HwpxSkillMissingError(
-            "convert_hwp.py 를 찾을 수 없습니다. hwpx-skill submodule을 초기화하세요."
+            "HWP conversion is unavailable because hwpx-skill/scripts/convert_hwp.py "
+            "is missing. Initialize the submodule or use the Docker/Fly deployment."
         )
     out_path = hwp_path.with_suffix(".hwpx")
-    # convert_hwp.py CLI: `input -o output` (see vendor/hwpx-skill/scripts).
     proc = subprocess.run(  # noqa: S603
         [sys.executable, str(script), str(hwp_path), "-o", str(out_path)],
         capture_output=True,
@@ -32,7 +32,11 @@ def _convert_hwp_to_hwpx(hwp_path: Path) -> Path:
         cwd=str(VENDOR_DIR),
     )
     if proc.returncode != 0 or not out_path.exists():
-        raise RuntimeError(f"HWP→HWPX 변환 실패: {proc.stderr[:500]}")
+        detail = (proc.stderr or proc.stdout or "").strip()[:500]
+        raise RuntimeError(
+            "HWP to HWPX conversion failed. HWP support requires the hwpx-skill "
+            f"conversion dependencies in the runtime. Detail: {detail}"
+        )
     return out_path
 
 

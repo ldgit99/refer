@@ -1,4 +1,5 @@
 import io
+import zipfile
 
 from docx import Document
 from fastapi.testclient import TestClient
@@ -59,3 +60,26 @@ def test_unsupported_format_returns_415() -> None:
 def test_empty_file_returns_400() -> None:
     resp = client.post("/jobs", files={"file": ("x.docx", b"", "application/octet-stream")})
     assert resp.status_code == 400
+
+
+def test_post_jobs_accepts_hwpx_zip_xml_fallback() -> None:
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <hp:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">
+      <hp:p><hp:run><hp:t>본문 (Kim, 2024).</hp:t></hp:run></hp:p>
+      <hp:p><hp:run><hp:t>References</hp:t></hp:run></hp:p>
+      <hp:p><hp:run><hp:t>Kim, S. (2024). A study. Journal, 1(1), 1-2.</hp:t></hp:run></hp:p>
+    </hp:sec>
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("Contents/section0.xml", xml)
+
+    resp = client.post(
+        "/jobs",
+        files={"file": ("sample.hwpx", buf.getvalue(), "application/octet-stream")},
+    )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["original_format"] == "hwpx"
+    assert body["match_report"]["stats"]["references"] == 1

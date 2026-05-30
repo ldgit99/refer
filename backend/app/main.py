@@ -37,6 +37,7 @@ def healthz() -> dict[str, object]:
         "status": "ok",
         "version": __version__,
         "llm_enabled": settings.llm_enabled,
+        "llm_provider": settings.active_llm_provider,
         "formats": document_capabilities(),
     }
 

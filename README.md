@@ -82,7 +82,9 @@ PowerShell may block `npm.ps1` depending on the execution policy; `cmd /c npm ..
 
 | Name | Purpose | Required |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | Enables LLM-backed critic/routing paths | No |
+| `OPENAI_API_KEY` | Enables OpenAI-backed critic/routing paths | No |
+| `ANTHROPIC_API_KEY` | Enables Anthropic-backed critic/routing paths | No |
+| `LLM_PROVIDER` | `auto`, `openai`, or `anthropic`; `auto` prefers OpenAI when both keys exist | No |
 | `CROSSREF_POLITE_EMAIL` | Crossref polite pool contact | Recommended |
 | `LANGSMITH_API_KEY` | Development tracing | No |
 | `REDIS_URL` | Future queue/checkpoint/cache backend | No |
