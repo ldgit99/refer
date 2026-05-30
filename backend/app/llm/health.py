@@ -18,20 +18,18 @@ class LLMHealth(BaseModel):
 
 
 def _safe_error_detail(resp: httpx.Response) -> str:
+    fallback = f"OpenAI API returned HTTP {resp.status_code}."
     try:
         payload = resp.json()
     except ValueError:
-        return f"OpenAI API returned HTTP {resp.status_code}."
+        return fallback
 
     error = payload.get("error") if isinstance(payload, dict) else None
     if isinstance(error, dict):
         code = error.get("code") or error.get("type")
-        message = error.get("message")
-        if code and message:
-            return f"{code}: {message}"
-        if message:
-            return str(message)
-    return f"OpenAI API returned HTTP {resp.status_code}."
+        if code:
+            return f"OpenAI API returned HTTP {resp.status_code} ({code})."
+    return fallback
 
 
 async def check_llm_health(

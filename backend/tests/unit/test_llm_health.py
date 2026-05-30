@@ -48,7 +48,8 @@ async def test_openai_llm_health_error_sanitizes_response() -> None:
     assert result.status == "error"
     assert result.provider == "openai"
     assert result.model == settings.openai_model_trivial
-    assert "Incorrect API key" in result.detail
+    assert "invalid_request_error" in result.detail
+    assert "Incorrect API key" not in result.detail
     assert "bad-key" not in result.detail
 
 
