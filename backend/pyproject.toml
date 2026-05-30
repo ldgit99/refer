@@ -45,6 +45,8 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Vendored third-party code (hwpx-skill submodule) is linted upstream, not here.
+extend-exclude = ["vendor"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]
@@ -55,6 +57,7 @@ python_version = "3.12"
 ignore_missing_imports = true
 warn_unused_ignores = false
 no_implicit_optional = true
+exclude = ["vendor/"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
