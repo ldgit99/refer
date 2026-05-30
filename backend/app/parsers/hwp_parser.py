@@ -23,8 +23,9 @@ def _convert_hwp_to_hwpx(hwp_path: Path) -> Path:
             "convert_hwp.py 를 찾을 수 없습니다. hwpx-skill submodule을 초기화하세요."
         )
     out_path = hwp_path.with_suffix(".hwpx")
+    # convert_hwp.py CLI: `input -o output` (see vendor/hwpx-skill/scripts).
     proc = subprocess.run(  # noqa: S603
-        [sys.executable, str(script), str(hwp_path), str(out_path)],
+        [sys.executable, str(script), str(hwp_path), "-o", str(out_path)],
         capture_output=True,
         text=True,
         timeout=180,

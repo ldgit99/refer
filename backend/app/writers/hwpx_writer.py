@@ -26,13 +26,18 @@ def _script(name: str) -> Path:
     return p
 
 
-def _patches_to_replacements(patches: list[Patch]) -> list[dict]:
-    out: list[dict] = []
+def _patches_to_replacements(patches: list[Patch]) -> dict[str, str]:
+    """Serialise patches to hwpx-skill's replacement map: {"old text": "new text"}.
+
+    clone_form.py loads this JSON as a dict and applies find->replace over the
+    document text (see vendor/hwpx-skill/clone_form.py).
+    """
+    out: dict[str, str] = {}
     for p in patches:
         if p.kind in {"reference_replace", "doi_insert"} and p.before:
-            out.append({"find": p.before, "replace": p.after})
+            out[p.before] = p.after
         elif p.kind == "citation_comment" and p.before:
-            out.append({"find": p.before, "replace": f"{p.before}  [{p.comment}]"})
+            out[p.before] = f"{p.before}  [{p.comment}]"
     return out
 
 
@@ -58,7 +63,14 @@ class HwpxWriter:
             )
 
             clone_proc = subprocess.run(  # noqa: S603
-                [sys.executable, str(clone), str(src), str(out), "--map", str(mapping)],
+                [
+                    sys.executable,
+                    str(clone),
+                    str(src),
+                    str(out),
+                    "--replacements",
+                    str(mapping),
+                ],
                 capture_output=True,
                 text=True,
                 timeout=180,
