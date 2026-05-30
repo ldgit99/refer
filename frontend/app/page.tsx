@@ -42,6 +42,15 @@ const MODE_LABELS: Record<OutputMode, string> = {
   final: "최종본",
 };
 
+const DOI_STATUS_LABELS: Record<string, string> = {
+  verified: "검증됨",
+  doi_mismatch: "제목 불일치",
+  invalid_doi: "링크 오류",
+  doi_suggested: "DOI 후보",
+  not_found: "메타데이터 없음",
+  skipped: "검증 보류",
+};
+
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<JobResult | null>(null);
@@ -350,38 +359,52 @@ function IssuePanel({ result }: { result: JobResult }) {
   );
 }
 
+function compactDoiUrl(url: string): string {
+  const compact = url.replace(/^https?:\/\//, "");
+  if (compact.length <= 34) return compact;
+  return `${compact.slice(0, 18)}...${compact.slice(-10)}`;
+}
+
+function doiStatusLabel(status: string): string {
+  return DOI_STATUS_LABELS[status] ?? status;
+}
+
 function DoiPanel({ items }: { items: VerifiedItem[] }) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const verifiedCount = items.filter((item) => item.status === "verified").length;
+  const errorCount = items.filter(
+    (item) => item.severity === "CRITICAL" || item.status === "invalid_doi",
+  ).length;
+  const warningCount = Math.max(items.length - verifiedCount - errorCount, 0);
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
   return (
     <section className="rounded-md border border-[#2BA8A2]/20 bg-white p-4 shadow-[0_4px_20px_rgba(43,168,162,0.10)]">
       <PanelTitle title="DOI 검증" count={items.length} />
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <DoiStat label="검증됨" value={verifiedCount} tone="ok" />
+        <DoiStat label="경고" value={warningCount} tone="warning" />
+        <DoiStat label="오류" value={errorCount} tone="error" />
+      </div>
       <div className="mt-3 space-y-2">
         {items.map((item) => (
-          <article key={item.ref_id} className="rounded-md border border-[#2BA8A2]/15 border-l-4 border-l-[#5DADE2] bg-white p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <SeverityBadge severity={item.severity} label={item.status} />
-              <StatusPill ok={item.doi_resolves} label="링크" />
-              <StatusPill ok={item.title_matches} label="제목" />
-            </div>
-            {item.doi_url && (
-              <a
-                href={item.doi_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 block break-all text-sm font-medium text-[#1F6F9F] underline decoration-[#5DADE2]/40 underline-offset-4"
-              >
-                {item.doi_url}
-              </a>
-            )}
-            <p className="mt-2 text-xs font-medium text-[#5E7E7A]">
-              신뢰도 {(item.confidence * 100).toFixed(0)}%
-            </p>
-            {item.matched_title && (
-              <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#34605C]">
-                {item.matched_title}
-              </p>
-            )}
-            {item.note && <p className="mt-2 text-xs leading-5 text-[#5E7E7A]">{item.note}</p>}
-          </article>
+          <DoiRow
+            key={item.ref_id}
+            expanded={expandedIds.has(item.ref_id)}
+            item={item}
+            onToggle={() => toggleExpanded(item.ref_id)}
+          />
         ))}
         {items.length === 0 && (
           <p className="rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-3 text-sm text-[#34605C]">
@@ -390,6 +413,116 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
         )}
       </div>
     </section>
+  );
+}
+
+function DoiStat({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone: "ok" | "warning" | "error";
+  value: number;
+}) {
+  const toneClass =
+    tone === "ok"
+      ? "border-[#2BA8A2]/20 bg-[#E8F6F5] text-[#1E8C86]"
+      : tone === "warning"
+        ? "border-[#FFD23F]/45 bg-[#FFF8E7] text-[#8A6A00]"
+        : "border-[#EF6C4A]/30 bg-[#FFF0EC] text-[#B84428]";
+  return (
+    <div className={`rounded-md border px-2.5 py-2 ${toneClass}`}>
+      <div className="text-[11px] font-bold">{label}</div>
+      <div className="mt-0.5 text-lg font-extrabold leading-none">{value}</div>
+    </div>
+  );
+}
+
+function DoiRow({
+  expanded,
+  item,
+  onToggle,
+}: {
+  expanded: boolean;
+  item: VerifiedItem;
+  onToggle: () => void;
+}) {
+  const showNote = item.status !== "verified" && item.note;
+  const displayUrl = item.doi_url ? compactDoiUrl(item.doi_url) : "";
+
+  return (
+    <article className="rounded-md border border-[#2BA8A2]/15 border-l-4 border-l-[#5DADE2] bg-white p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-xs font-bold text-[#5E7E7A]">{item.ref_id}</span>
+            <SeverityBadge severity={item.severity} label={doiStatusLabel(item.status)} />
+            <StatusPill ok={item.doi_resolves} label="링크" />
+            <StatusPill ok={item.title_matches} label="제목" />
+          </div>
+          <div className="mt-2 flex min-w-0 items-center gap-2 text-xs font-medium text-[#5E7E7A]">
+            {item.doi_url ? (
+              <a
+                href={item.doi_url}
+                target="_blank"
+                rel="noreferrer"
+                title={item.doi_url}
+                className="min-w-0 truncate text-[#1F6F9F] underline decoration-[#5DADE2]/40 underline-offset-4"
+              >
+                {displayUrl}
+              </a>
+            ) : (
+              <span>DOI 링크 없음</span>
+            )}
+            <span className="shrink-0">신뢰도 {(item.confidence * 100).toFixed(0)}%</span>
+          </div>
+          {item.matched_title && (
+            <p className="mt-1 truncate text-xs text-[#34605C]" title={item.matched_title}>
+              제목: {item.matched_title}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={onToggle}
+          className="shrink-0 rounded-full border border-[#2BA8A2]/25 bg-[#E8F6F5] px-2.5 py-1 text-xs font-bold text-[#1E8C86] hover:bg-white"
+        >
+          {expanded ? "접기" : "상세"}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="mt-3 space-y-2 rounded-md border border-[#2BA8A2]/10 bg-[#EFF8F7] p-3 text-xs leading-5 text-[#34605C]">
+          {item.doi_url && (
+            <div>
+              <div className="font-extrabold text-[#1E8C86]">DOI 링크</div>
+              <a
+                href={item.doi_url}
+                target="_blank"
+                rel="noreferrer"
+                className="break-all text-[#1F6F9F] underline decoration-[#5DADE2]/40 underline-offset-4"
+              >
+                {item.doi_url}
+              </a>
+            </div>
+          )}
+          {item.matched_title && (
+            <div>
+              <div className="font-extrabold text-[#1E8C86]">매칭 제목</div>
+              <p>{item.matched_title}</p>
+            </div>
+          )}
+          {showNote && (
+            <div>
+              <div className="font-extrabold text-[#B84428]">진단 메모</div>
+              <p>{item.note}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </article>
   );
 }
 
