@@ -31,7 +31,8 @@ Thumbs.db
 .idea/
 .vscode/
 
-# --- Claude Code local session settings (not the committed harness catalog) ---
+# --- Claude Code local runtime (locks, session settings) ---
+.claude/scheduled_tasks.lock
 .claude/settings/
 .claude/settings.local.json
 
