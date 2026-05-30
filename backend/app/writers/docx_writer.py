@@ -96,11 +96,15 @@ class DocxWriter:
             r._element.getparent().remove(r._element)
 
     def _replace_paragraph(self, para, patch: Patch, mode: OutputMode, rev: int) -> int:
-        original = patch.before or para.text
+        para_text = para.text
+        original = patch.before or para_text
         new_text = patch.after
+        if patch.before and patch.before not in para_text:
+            return rev
+
         if mode == "final":
             self._clear_runs(para)
-            para.add_run(new_text)
+            para.add_run(para_text.replace(patch.before, new_text, 1) if patch.before else new_text)
             return rev
 
         p = para._p

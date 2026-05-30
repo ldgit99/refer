@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api.routes import router as api_router
+from app.capabilities import document_capabilities
 from app.config import get_settings
 
 settings = get_settings()
@@ -36,6 +37,7 @@ def healthz() -> dict[str, object]:
         "status": "ok",
         "version": __version__,
         "llm_enabled": settings.llm_enabled,
+        "formats": document_capabilities(),
     }
 
 

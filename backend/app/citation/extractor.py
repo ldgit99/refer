@@ -39,6 +39,8 @@ _NARRATIVE_RE = re.compile(
 _KOREAN_NARRATIVE_RE = re.compile(
     rf"(({_KOREAN_NAME})(?:\s*(?:등|외))?)\s*\((\d{{4}})([a-z])?\)"
 )
+_PAREN_GROUP_RE = re.compile(r"\(([^()]*\d{4}[a-z]?[^()]*)\)")
+_AUTHOR_YEAR_PART_RE = re.compile(r"^\s*(.+?)[,\s]+(\d{4})([a-z])?\s*$")
 
 
 class InTextCitation(BaseModel):
@@ -88,7 +90,53 @@ def extract_from_text(text: str, paragraph_index: int) -> list[InTextCitation]:
         found.append(cit)
         seen_spans.append(span)
 
+    for m in _PAREN_GROUP_RE.finditer(text):
+        content = m.group(1)
+        if ";" not in content:
+            continue
+        parts = [part.strip() for part in content.split(";") if part.strip()]
+        parsed_parts: list[tuple[str, re.Match[str], int]] = []
+        search_from = 0
+        for part in parts:
+            pm = _AUTHOR_YEAR_PART_RE.match(part)
+            if not pm:
+                parsed_parts = []
+                break
+            relative_start = content.find(part, search_from)
+            if relative_start < 0:
+                relative_start = search_from
+            search_from = relative_start + len(part)
+            parsed_parts.append((part, pm, relative_start))
+
+        if not parsed_parts:
+            continue
+
+        for part, pm, relative_start in parsed_parts:
+            start = m.start(1) + relative_start
+            end = start + len(part)
+            raw = f"({part})"
+            style: CitationStyle = (
+                "korean_author_year"
+                if re.search(_KOREAN_NAME, pm.group(1))
+                else "author_year"
+            )
+            add(
+                InTextCitation(
+                    raw=raw,
+                    style=style,
+                    authors=_split_authors(pm.group(1)),
+                    year=int(pm.group(2)),
+                    suffix=pm.group(3),
+                    paragraph_index=paragraph_index,
+                    char_start=start,
+                    char_end=end,
+                ),
+                (m.start(), m.end()),
+            )
+
     for m in _AUTHOR_YEAR_RE.finditer(text):
+        if overlaps(m.start(), m.end()):
+            continue
         add(
             InTextCitation(
                 raw=m.group(0),

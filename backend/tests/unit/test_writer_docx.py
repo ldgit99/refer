@@ -67,3 +67,19 @@ def test_no_patches_roundtrips() -> None:
     data = _docx(["A", "B"])
     out = DocxWriter().apply(data, [], mode="tracked")
     assert _text(out) == "A\nB"
+
+
+def test_patch_with_missing_before_text_is_skipped() -> None:
+    data = _docx(["References", "Actual paragraph."])
+    patch = Patch(
+        id="p1",
+        kind="reference_replace",
+        target=ParagraphRef(paragraph_index=1),
+        before="Different paragraph.",
+        after="Replacement that should not apply.",
+        source="F2",
+    )
+    out = DocxWriter().apply(data, [patch], mode="final")
+    text = _text(out)
+    assert "Actual paragraph." in text
+    assert "Replacement that should not apply." not in text

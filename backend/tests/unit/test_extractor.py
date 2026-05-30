@@ -63,6 +63,15 @@ def test_narrative_three_authors() -> None:
     assert cits[0].year == 2024
 
 
+def test_parenthetical_multiple_author_year_citations() -> None:
+    cits = extract_from_text("(Kim, 2023; Lee et al., 2024; Park, 2025a)", 0)
+    assert [(c.authors[0], c.year, c.suffix) for c in cits] == [
+        ("Kim", 2023, None),
+        ("Lee", 2024, None),
+        ("Park", 2025, "a"),
+    ]
+
+
 def test_paragraph_index_and_offsets() -> None:
     text = "앞부분 (Kim, 2023) 뒷부분"
     cits = extract_from_text(text, 7)

@@ -137,6 +137,27 @@ def match(
                     reference_index=chosen.index,
                 )
             )
+        elif (
+            cit.suffix
+            and chosen.suffix
+            and cit.suffix.lower() != chosen.suffix.lower()
+        ):
+            issues.append(
+                MatchIssue(
+                    type="year_mismatch",
+                    severity="WARNING",
+                    message=(
+                        f"본문 {cit.raw!r}의 연도 구분자({cit.suffix})와 참고문헌 구분자"
+                        f"({chosen.suffix})가 다릅니다."
+                    ),
+                    citation_raw=cit.raw,
+                    reference_raw=chosen.raw,
+                    paragraph_index=cit.paragraph_index,
+                    char_start=cit.char_start,
+                    char_end=cit.char_end,
+                    reference_index=chosen.index,
+                )
+            )
 
         # APA 7: 3+ authors must use "et al." from the first citation.
         has_et_al = "외" in cit.raw or "et al" in cit.raw.lower()

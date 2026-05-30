@@ -54,6 +54,15 @@ def test_year_mismatch() -> None:
     assert any(i.type == "year_mismatch" for i in report.issues)
 
 
+def test_year_suffix_mismatch() -> None:
+    cits = [_cit("(Kim, 2024a)", ["Kim"], 2024)]
+    cits[0].suffix = "a"
+    refs = [_ref(0, ["Kim"], 2024)]
+    refs[0].suffix = "b"
+    report = match(cits, refs)
+    assert any(i.type == "year_mismatch" for i in report.issues)
+
+
 def test_author_count_mismatch_et_al() -> None:
     cits = [_cit("(Kim, Lee & Park, 2023)", ["Kim", "Lee", "Park"], 2023)]
     refs = [_ref(0, ["Kim", "Lee", "Park"], 2023)]
