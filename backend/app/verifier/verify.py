@@ -1,8 +1,12 @@
-"""F3 verification logic (research.md §5.2, §5.3).
+"""F3 DOI and metadata verification.
 
-Compares a reference against Crossref metadata to decide existence, DOI validity,
-and metadata agreement. Designed to be testable offline by injecting a client
-(respx mocks the HTTP layer in tests).
+For references that already include a DOI, verification checks three things:
+  * the DOI URL resolves through doi.org;
+  * the resolver returns usable metadata;
+  * resolver/Crossref titles match the reference title above the configured gate.
+
+For references without a DOI, Crossref bibliographic search is used to suggest
+one when the metadata match is strong enough.
 """
 
 from __future__ import annotations
@@ -34,6 +38,9 @@ class VerifiedItem(BaseModel):
     status: VerificationStatus
     confidence: float = 0.0
     suggested_doi: str | None = None
+    doi_url: str | None = None
+    doi_resolves: bool | None = None
+    title_matches: bool | None = None
     matched_title: str | None = None
     severity: Literal["INFO", "WARNING", "CRITICAL"] = "INFO"
     note: str = ""
@@ -41,7 +48,7 @@ class VerifiedItem(BaseModel):
 
 def extract_doi(text: str) -> str | None:
     m = DOI_RE.search(text or "")
-    return m.group(0).rstrip(".").lower() if m else None
+    return m.group(0).rstrip(".,;)]}").lower() if m else None
 
 
 def _norm_title(t: str) -> str:
@@ -63,13 +70,15 @@ def compare_metadata(ref: CSLItem, meta: CSLItem) -> tuple[float, str]:
         meta_first = meta.author[0].family.lower()
         author_ok = fuzz.ratio(ref_first, meta_first) >= 80
         if not author_ok:
-            notes.append(f"첫 저자 불일치({ref.author[0].family}≠{meta.author[0].family})")
+            notes.append(
+                f"first author mismatch ({ref.author[0].family} vs {meta.author[0].family})"
+            )
 
     year_ok = True
     if ref.issued_year and meta.issued_year:
         year_ok = abs(ref.issued_year - meta.issued_year) <= 1
         if not year_ok:
-            notes.append(f"연도 차이({ref.issued_year}≠{meta.issued_year})")
+            notes.append(f"year mismatch ({ref.issued_year} vs {meta.issued_year})")
 
     confidence = title_sim
     if not author_ok:
@@ -79,44 +88,93 @@ def compare_metadata(ref: CSLItem, meta: CSLItem) -> tuple[float, str]:
     return confidence, "; ".join(notes)
 
 
-async def verify_reference(ref: CSLItem, client: CrossrefClient) -> VerifiedItem:
+async def _verify_existing_doi(
+    ref: CSLItem,
+    doi: str,
+    client: CrossrefClient,
+) -> VerifiedItem:
     settings = get_settings()
-    doi = ref.doi or extract_doi(ref.title)
+    doi_url = f"https://doi.org/{doi}"
 
-    if doi:
-        meta_msg = await client.get_work(doi)
-        if meta_msg is None:
-            return VerifiedItem(
-                ref_id=ref.id,
-                status="invalid_doi",
-                severity="CRITICAL",
-                note=f"DOI {doi} 가 Crossref에 존재하지 않습니다.",
-            )
-        meta = CSLItem.from_crossref(ref.id, meta_msg)
-        confidence, note = compare_metadata(ref, meta)
-        if confidence >= settings.doi_title_confidence:
-            return VerifiedItem(
-                ref_id=ref.id,
-                status="verified",
-                confidence=confidence,
-                matched_title=meta.title,
-                severity="INFO",
-                note=note,
-            )
+    resolver_msg = await client.resolve_doi_csl(doi)
+    if resolver_msg is None:
         return VerifiedItem(
             ref_id=ref.id,
-            status="doi_mismatch",
-            confidence=confidence,
-            matched_title=meta.title,
-            severity="WARNING",
-            note=note or "DOI는 존재하나 메타데이터 일치도가 낮습니다.",
+            status="invalid_doi",
+            severity="CRITICAL",
+            doi_url=doi_url,
+            doi_resolves=False,
+            title_matches=False,
+            note=f"DOI URL {doi_url} did not resolve to usable metadata.",
         )
 
-    # No DOI: search to suggest one.
+    resolver_meta = CSLItem.from_csl_json(ref.id, resolver_msg)
+    resolver_confidence, resolver_note = compare_metadata(ref, resolver_meta)
+    resolver_title_matches = resolver_confidence >= settings.doi_title_confidence
+
+    crossref_msg = await client.get_work(doi)
+    if crossref_msg is None:
+        return VerifiedItem(
+            ref_id=ref.id,
+            status="invalid_doi",
+            confidence=resolver_confidence,
+            doi_url=doi_url,
+            doi_resolves=True,
+            title_matches=resolver_title_matches,
+            matched_title=resolver_meta.title,
+            severity="CRITICAL",
+            note="DOI URL resolves, but Crossref did not return a work record.",
+        )
+
+    crossref_meta = CSLItem.from_crossref(ref.id, crossref_msg)
+    crossref_confidence, crossref_note = compare_metadata(ref, crossref_meta)
+    crossref_title_matches = crossref_confidence >= settings.doi_title_confidence
+    confidence = max(resolver_confidence, crossref_confidence)
+    matched_title = resolver_meta.title or crossref_meta.title
+    note = "; ".join(n for n in (resolver_note, crossref_note) if n)
+
+    if resolver_title_matches and crossref_title_matches:
+        return VerifiedItem(
+            ref_id=ref.id,
+            status="verified",
+            confidence=confidence,
+            doi_url=doi_url,
+            doi_resolves=True,
+            title_matches=True,
+            matched_title=matched_title,
+            severity="INFO",
+            note=note,
+        )
+
+    return VerifiedItem(
+        ref_id=ref.id,
+        status="doi_mismatch",
+        confidence=confidence,
+        doi_url=doi_url,
+        doi_resolves=True,
+        title_matches=False,
+        matched_title=matched_title,
+        severity="WARNING",
+        note=note
+        or "DOI URL resolves, but resolver/Crossref title metadata does not match the reference title.",
+    )
+
+
+async def verify_reference(ref: CSLItem, client: CrossrefClient) -> VerifiedItem:
+    settings = get_settings()
+    doi = ref.doi or extract_doi(ref.url) or extract_doi(ref.title)
+
+    if doi:
+        return await _verify_existing_doi(ref, doi, client)
+
     if not ref.title:
         return VerifiedItem(
-            ref_id=ref.id, status="not_found", severity="WARNING", note="제목 정보 없음"
+            ref_id=ref.id,
+            status="not_found",
+            severity="WARNING",
+            note="Missing title metadata.",
         )
+
     candidates = await client.search_bibliographic(ref.title, rows=5)
     best: tuple[float, CSLItem | None] = (0.0, None)
     for c in candidates:
@@ -126,19 +184,24 @@ async def verify_reference(ref: CSLItem, client: CrossrefClient) -> VerifiedItem
             best = (conf, cand)
 
     if best[1] is not None and best[0] >= settings.doi_title_confidence:
+        suggested_doi = best[1].doi or None
         return VerifiedItem(
             ref_id=ref.id,
             status="doi_suggested",
             confidence=best[0],
-            suggested_doi=best[1].doi or None,
+            suggested_doi=suggested_doi,
+            doi_url=f"https://doi.org/{suggested_doi}" if suggested_doi else None,
             matched_title=best[1].title,
+            title_matches=True,
             severity="INFO",
-            note="DOI 자동 보완 후보를 찾았습니다.",
+            note="Found a strong DOI candidate from bibliographic metadata.",
         )
+
     return VerifiedItem(
         ref_id=ref.id,
         status="not_found",
         confidence=best[0],
+        title_matches=False,
         severity="WARNING",
-        note="외부 메타데이터에서 일치하는 문헌을 찾지 못했습니다.",
+        note="No sufficiently matching metadata record was found.",
     )

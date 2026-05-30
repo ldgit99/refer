@@ -1,0 +1,14 @@
+# Runtime deps for the Vercel Python serverless deployment (core/deterministic).
+# The uv/pyproject setup remains the source of truth for local dev & CI; this
+# file mirrors the base dependencies so Vercel's @vercel/python can install them.
+# LangGraph/arq/citeproc are optional extras not needed for the serverless demo
+# (graph.py imports langgraph lazily and degrades gracefully).
+fastapi>=0.115
+python-multipart>=0.0.12
+python-docx>=1.1
+lxml>=5.3
+rapidfuzz>=3.10
+httpx>=0.28
+tenacity>=9.0
+pydantic>=2.9
+pydantic-settings>=2.6

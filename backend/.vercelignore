@@ -1,0 +1,11 @@
+# Keep the serverless bundle small and predictable.
+.venv/
+vendor/
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+Dockerfile
+fly.toml

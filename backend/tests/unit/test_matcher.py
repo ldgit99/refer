@@ -61,6 +61,22 @@ def test_author_count_mismatch_et_al() -> None:
     assert any(i.type == "author_count_mismatch" for i in report.issues)
 
 
+def test_three_or_more_authors_parenthetical_et_al_matches_reference() -> None:
+    cits = [_cit("(Kim et al., 2023)", ["Kim"], 2023)]
+    refs = [_ref(0, ["Kim", "Lee", "Park"], 2023)]
+    report = match(cits, refs)
+    assert not any(i.type == "orphan_citation" for i in report.issues)
+    assert not any(i.type == "orphan_reference" for i in report.issues)
+
+
+def test_three_or_more_authors_narrative_et_al_matches_reference() -> None:
+    cits = [_cit("Kim et al. (2023)", ["Kim"], 2023, style="narrative")]
+    refs = [_ref(0, ["Kim", "Lee", "Park"], 2023)]
+    report = match(cits, refs)
+    assert not any(i.type == "orphan_citation" for i in report.issues)
+    assert not any(i.type == "orphan_reference" for i in report.issues)
+
+
 def test_numeric_orphan() -> None:
     cits = [_cit("[5]", [], 0, style="numeric", numbers=[5])]
     refs = [_ref(0, ["Kim"], 2023, number=1)]

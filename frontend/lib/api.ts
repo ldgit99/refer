@@ -26,13 +26,30 @@ export interface MatchReport {
 export interface Patch {
   id: string;
   kind: "reference_replace" | "citation_comment" | "doi_insert";
-  target: { paragraph_index: number; char_start?: number | null; char_end?: number | null };
+  target: {
+    paragraph_index: number;
+    char_start?: number | null;
+    char_end?: number | null;
+  };
   before: string;
   after: string;
   comment: string;
   confidence: number;
   source: "F1" | "F2" | "F3";
   severity: Severity;
+}
+
+export interface VerifiedItem {
+  ref_id: string;
+  status: string;
+  confidence: number;
+  suggested_doi?: string | null;
+  doi_url?: string | null;
+  doi_resolves?: boolean | null;
+  title_matches?: boolean | null;
+  matched_title?: string | null;
+  severity: Severity;
+  note: string;
 }
 
 export interface JobResult {
@@ -42,8 +59,10 @@ export interface JobResult {
   status: string;
   match_report: MatchReport;
   formatted: Record<string, string>;
-  verified: Record<string, unknown>;
+  verified: Record<string, VerifiedItem>;
   patches: Patch[];
+  critics?: Record<string, unknown>;
+  hitl_queue?: unknown[];
 }
 
 async function parseError(resp: Response): Promise<string> {
@@ -59,13 +78,13 @@ export async function uploadForReview(file: File): Promise<JobResult> {
   const form = new FormData();
   form.append("file", file);
   const resp = await fetch(`${BACKEND_URL}/jobs`, { method: "POST", body: form });
-  if (!resp.ok) throw new Error(`업로드 실패: ${await parseError(resp)}`);
+  if (!resp.ok) throw new Error(`Upload failed: ${await parseError(resp)}`);
   return resp.json();
 }
 
 export async function getJob(id: string): Promise<JobResult> {
   const resp = await fetch(`${BACKEND_URL}/jobs/${id}`);
-  if (!resp.ok) throw new Error(`작업 조회 실패: ${await parseError(resp)}`);
+  if (!resp.ok) throw new Error(`Job lookup failed: ${await parseError(resp)}`);
   return resp.json();
 }
 
@@ -79,7 +98,7 @@ export async function applyPatches(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ accepted_patch_ids: acceptedPatchIds, mode }),
   });
-  if (!resp.ok) throw new Error(`반영 실패: ${await parseError(resp)}`);
+  if (!resp.ok) throw new Error(`Apply failed: ${await parseError(resp)}`);
   return resp.json();
 }
 

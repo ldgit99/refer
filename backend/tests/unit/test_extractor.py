@@ -39,6 +39,30 @@ def test_narrative() -> None:
     assert any(c.style == "narrative" and c.year == 2020 for c in cits)
 
 
+def test_parenthetical_et_al() -> None:
+    cits = extract_from_text("(Kim et al., 2024) reported a strong effect.", 0)
+    assert len(cits) == 1
+    assert cits[0].style == "author_year"
+    assert cits[0].authors == ["Kim"]
+    assert cits[0].year == 2024
+
+
+def test_narrative_et_al() -> None:
+    cits = extract_from_text("Kim et al. (2024) reported a strong effect.", 0)
+    assert len(cits) == 1
+    assert cits[0].style == "narrative"
+    assert cits[0].authors == ["Kim"]
+    assert cits[0].year == 2024
+
+
+def test_narrative_three_authors() -> None:
+    cits = extract_from_text("Kim, Lee, and Park (2024) reported an effect.", 0)
+    assert len(cits) == 1
+    assert cits[0].style == "narrative"
+    assert cits[0].authors == ["Kim", "Lee", "Park"]
+    assert cits[0].year == 2024
+
+
 def test_paragraph_index_and_offsets() -> None:
     text = "앞부분 (Kim, 2023) 뒷부분"
     cits = extract_from_text(text, 7)

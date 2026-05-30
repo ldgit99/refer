@@ -91,3 +91,31 @@ class CSLItem(BaseModel):
             doi=str(msg.get("DOI", "")),
             url=str(msg.get("URL", "")),
         )
+
+    @classmethod
+    def from_csl_json(cls, item_id: str, msg: dict) -> CSLItem:
+        """Build a CSLItem from DOI content-negotiation CSL JSON."""
+        authors = [
+            CSLName(family=a.get("family", ""), given=a.get("given", ""))
+            for a in msg.get("author", [])
+            if isinstance(a, dict)
+        ]
+        year: int | None = None
+        issued = msg.get("issued")
+        parts = issued.get("date-parts") if isinstance(issued, dict) else None
+        if parts and parts[0] and parts[0][0]:
+            year = int(parts[0][0])
+        return cls(
+            id=item_id,
+            type=msg.get("type", "article-journal"),
+            author=authors,
+            issued_year=year,
+            title=str(msg.get("title", "")),
+            container_title=str(msg.get("container-title", "")),
+            volume=str(msg.get("volume", "")),
+            issue=str(msg.get("issue", "")),
+            page=str(msg.get("page", "")),
+            publisher=str(msg.get("publisher", "")),
+            doi=str(msg.get("DOI", msg.get("doi", ""))),
+            url=str(msg.get("URL", msg.get("url", ""))),
+        )

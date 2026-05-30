@@ -1,10 +1,10 @@
-"""In-text citation extraction (research.md §3.1).
+"""In-text citation extraction.
 
-Four citation styles are recognised:
-  * author_year         — (Kim, 2023), (Lee & Park, 2024a)
-  * korean_author_year  — (이동국, 2024), (김철수, 이영희, 2023)
-  * numeric             — [12], [3, 5-7]
-  * narrative           — Smith (2020) reported ...
+Recognised citation styles:
+  * author_year: (Kim, 2023), (Lee & Park, 2024a), (Kim et al., 2024)
+  * korean_author_year: (김동국, 2024), (김철수, 이영희, 2023)
+  * numeric: [12], [3, 5-7]
+  * narrative: Smith (2020), Kim et al. (2024), Kim, Lee, and Park (2024)
 
 Each citation keeps its paragraph index and character range so the UI can jump
 back to the exact location.
@@ -21,22 +21,24 @@ from app.parsers.base import ParsedDocument
 
 CitationStyle = Literal["author_year", "korean_author_year", "numeric", "narrative"]
 
-# Latin author-year inside parentheses, e.g. "(Kim, 2023)", "(Lee & Park, 2024a)".
-_AUTHOR_YEAR_RE = re.compile(
-    r"\(([A-Z][A-Za-z.''\-]+(?:(?:,|\s|&|and|et al\.?)+[A-Za-z.''\-]+)*?)[,\s]+(\d{4})([a-z])?\)"
-)
-# Korean author-year, e.g. "(이동국, 2024)", "(김철수, 이영희, 2023)".
-_KOREAN_AUTHOR_YEAR_RE = re.compile(
-    r"\(([가-힣]{2,4}(?:\s*[,·]\s*[가-힣]{2,4})*(?:\s*외)?)[\s,]+(\d{4})([a-z])?\)"
-)
-# Numeric / IEEE, e.g. "[12]", "[3, 5-7]".
-_NUMERIC_RE = re.compile(r"\[(\d+(?:\s*[\-,]\s*\d+)*)\]")
-# Narrative, e.g. "Smith (2020)", "Kim and Lee (2019)".
-_NARRATIVE_RE = re.compile(
-    r"\b([A-Z][a-z]+(?:\s+(?:and|&|et al\.?)\s+[A-Z][a-z]+)*)\s+\((\d{4})([a-z])?\)"
-)
+_LATIN_NAME = r"[A-Z][A-Za-z.''\-]+"
+_KOREAN_NAME = r"[가-힣]{2,4}"
 
-_KOREAN_NARRATIVE_RE = re.compile(r"([가-힣]{2,4}(?:\s*외)?)\s*\((\d{4})([a-z])?\)")
+# Parenthetical Latin author-year citations. The author group is intentionally
+# permissive because the splitter normalises separators and "et al." later.
+_AUTHOR_YEAR_RE = re.compile(
+    rf"\(([^()]*?{_LATIN_NAME}[^()]*?)[,\s]+(\d{{4}})([a-z])?\)"
+)
+_KOREAN_AUTHOR_YEAR_RE = re.compile(
+    rf"\((({_KOREAN_NAME})(?:\s*[,·]\s*{_KOREAN_NAME})*(?:\s*(?:등|외))?)[\s,]+(\d{{4}})([a-z])?\)"
+)
+_NUMERIC_RE = re.compile(r"\[(\d+(?:\s*[\-,]\s*\d+)*)\]")
+_NARRATIVE_RE = re.compile(
+    rf"\b({_LATIN_NAME}(?:\s+et\s+al\.?|(?:\s*,\s*{_LATIN_NAME})*(?:,?\s*(?:and|&)\s*{_LATIN_NAME})?))\s+\((\d{{4}})([a-z])?\)"
+)
+_KOREAN_NARRATIVE_RE = re.compile(
+    rf"(({_KOREAN_NAME})(?:\s*(?:등|외))?)\s*\((\d{{4}})([a-z])?\)"
+)
 
 
 class InTextCitation(BaseModel):
@@ -44,7 +46,7 @@ class InTextCitation(BaseModel):
     style: CitationStyle
     authors: list[str] = Field(default_factory=list)
     year: int | None = None
-    suffix: str | None = None  # disambiguator like "a" in 2024a
+    suffix: str | None = None
     numbers: list[int] = Field(default_factory=list)
     paragraph_index: int
     char_start: int
@@ -52,9 +54,10 @@ class InTextCitation(BaseModel):
 
 
 def _split_authors(group: str) -> list[str]:
-    """Split a citation author group into individual family-name tokens."""
-    cleaned = re.sub(r"\bet al\.?\b", "", group, flags=re.IGNORECASE)
-    parts = re.split(r"\s*(?:,|&|·|and|외)\s*", cleaned)
+    """Split a citation author group into family-name tokens."""
+    cleaned = re.sub(r"\bet\s+al\.?\b", "", group, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*(?:등|외)\b", "", cleaned)
+    parts = re.split(r"\s*(?:,|·|&|and)\s*", cleaned)
     return [p.strip(" .'-") for p in parts if p.strip(" .'-")]
 
 
@@ -73,12 +76,8 @@ def _expand_numbers(group: str) -> list[int]:
     return nums
 
 
-def _has_et_al(group: str) -> bool:
-    return bool(re.search(r"et al\.?|외", group, flags=re.IGNORECASE))
-
-
 def extract_from_text(text: str, paragraph_index: int) -> list[InTextCitation]:
-    """Extract every in-text citation from a single paragraph's text."""
+    """Extract every in-text citation from a single paragraph."""
     found: list[InTextCitation] = []
     seen_spans: list[tuple[int, int]] = []
 
@@ -112,8 +111,8 @@ def extract_from_text(text: str, paragraph_index: int) -> list[InTextCitation]:
                 raw=m.group(0),
                 style="korean_author_year",
                 authors=_split_authors(m.group(1)),
-                year=int(m.group(2)),
-                suffix=m.group(3),
+                year=int(m.group(3)),
+                suffix=m.group(4),
                 paragraph_index=paragraph_index,
                 char_start=m.start(),
                 char_end=m.end(),
@@ -143,8 +142,8 @@ def extract_from_text(text: str, paragraph_index: int) -> list[InTextCitation]:
                     raw=m.group(0),
                     style="narrative",
                     authors=_split_authors(m.group(1)),
-                    year=int(m.group(2)),
-                    suffix=m.group(3),
+                    year=int(m.group(2 if regex is _NARRATIVE_RE else 3)),
+                    suffix=m.group(3 if regex is _NARRATIVE_RE else 4),
                     paragraph_index=paragraph_index,
                     char_start=m.start(),
                     char_end=m.end(),

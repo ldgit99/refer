@@ -78,6 +78,30 @@ class CrossrefClient:
         stop=stop_after_attempt(3),
         reraise=True,
     )
+    async def resolve_doi_csl(self, doi: str) -> dict | None:
+        """Resolve a DOI URL and request CSL JSON metadata from doi.org."""
+        doi_norm = doi.strip().lower()
+        resp = await self.client.get(
+            f"https://doi.org/{doi_norm}",
+            headers={
+                **_headers(),
+                "Accept": "application/vnd.citationstyles.csl+json",
+            },
+            follow_redirects=True,
+        )
+        if resp.status_code in {404, 410}:
+            return None
+        resp.raise_for_status()
+        if "json" not in resp.headers.get("content-type", ""):
+            return None
+        return resp.json()
+
+    @retry(
+        retry=retry_if_exception_type(httpx.TransportError),
+        wait=wait_exponential(multiplier=0.5, max=8),
+        stop=stop_after_attempt(3),
+        reraise=True,
+    )
     async def search_bibliographic(self, query: str, rows: int = 5) -> list[dict]:
         """Search works by free-form bibliographic string."""
         resp = await self.client.get(
