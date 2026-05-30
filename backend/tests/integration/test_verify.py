@@ -33,20 +33,29 @@ def _doi_csl(title: str, family: str, year: int, doi: str) -> dict:
     }
 
 
+def _mock_doi_link(doi: str, status_code: int = 200) -> None:
+    respx.get(
+        f"https://doi.org/{doi}",
+        headers__contains={"Accept": "text/html,application/xhtml+xml"},
+    ).mock(return_value=httpx.Response(status_code, text="<html></html>"))
+
+
+def _mock_doi_csl(doi: str, title: str, family: str, year: int) -> None:
+    respx.get(f"https://doi.org/{doi}").mock(
+        return_value=httpx.Response(
+            200,
+            json=_doi_csl(title, family, year, doi),
+            headers={"content-type": "application/vnd.citationstyles.csl+json"},
+        )
+    )
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_valid_doi_verified() -> None:
     doi = "10.1000/xyz"
-    respx.get(f"https://doi.org/{doi}", headers__contains={"Accept": "text/html,application/xhtml+xml"}).mock(
-        return_value=httpx.Response(200, text="<html></html>")
-    )
-    respx.get(f"https://doi.org/{doi}").mock(
-        return_value=httpx.Response(
-            200,
-            json=_doi_csl("A study of things", "Kim", 2024, doi),
-            headers={"content-type": "application/vnd.citationstyles.csl+json"},
-        )
-    )
+    _mock_doi_link(doi)
+    _mock_doi_csl(doi, "A study of things", "Kim", 2024)
     respx.get(f"https://api.crossref.org/works/{doi}").mock(
         return_value=httpx.Response(
             200, json=_crossref_work("A study of things", "Kim", 2024, doi)
@@ -72,9 +81,7 @@ async def test_valid_doi_verified() -> None:
 @respx.mock
 async def test_invalid_doi_flagged() -> None:
     doi = "10.0000/missing"
-    respx.get(f"https://doi.org/{doi}").mock(
-        return_value=httpx.Response(404)
-    )
+    _mock_doi_link(doi, 404)
     ref = CSLItem(id="r1", title="Ghost paper", doi=doi)
     async with CrossrefClient() as client:
         result = await verify_reference(ref, client)
@@ -86,18 +93,9 @@ async def test_invalid_doi_flagged() -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_doi_mismatch_downgraded() -> None:
-    """EvidenceCritic-style guard: DOI exists but metadata disagrees."""
     doi = "10.1000/realbutwrong"
-    respx.get(f"https://doi.org/{doi}", headers__contains={"Accept": "text/html,application/xhtml+xml"}).mock(
-        return_value=httpx.Response(200, text="<html></html>")
-    )
-    respx.get(f"https://doi.org/{doi}").mock(
-        return_value=httpx.Response(
-            200,
-            json=_doi_csl("Completely different paper", "Yi", 2010, doi),
-            headers={"content-type": "application/vnd.citationstyles.csl+json"},
-        )
-    )
+    _mock_doi_link(doi)
+    _mock_doi_csl(doi, "Completely different paper", "Yi", 2010)
     respx.get(f"https://api.crossref.org/works/{doi}").mock(
         return_value=httpx.Response(
             200, json=_crossref_work("Completely different paper", "Yi", 2010, doi)
@@ -122,19 +120,9 @@ async def test_doi_mismatch_downgraded() -> None:
 @respx.mock
 async def test_doi_link_resolves_but_crossref_missing_is_not_found() -> None:
     doi = "10.1000/resolver-only"
-    respx.get(f"https://doi.org/{doi}", headers__contains={"Accept": "text/html,application/xhtml+xml"}).mock(
-        return_value=httpx.Response(200, text="<html></html>")
-    )
-    respx.get(f"https://doi.org/{doi}").mock(
-        return_value=httpx.Response(
-            200,
-            json=_doi_csl("A study of things", "Kim", 2024, doi),
-            headers={"content-type": "application/vnd.citationstyles.csl+json"},
-        )
-    )
-    respx.get(f"https://api.crossref.org/works/{doi}").mock(
-        return_value=httpx.Response(404)
-    )
+    _mock_doi_link(doi)
+    _mock_doi_csl(doi, "A study of things", "Kim", 2024)
+    respx.get(f"https://api.crossref.org/works/{doi}").mock(return_value=httpx.Response(404))
     ref = CSLItem(
         id="r2b",
         title="A study of things",
@@ -153,12 +141,11 @@ async def test_doi_link_resolves_but_crossref_missing_is_not_found() -> None:
 @respx.mock
 async def test_doi_browser_link_resolves_without_csl_json_is_not_invalid() -> None:
     doi = "10.1000/html-only"
-    respx.get(
-        f"https://doi.org/{doi}",
-        headers__contains={"Accept": "text/html,application/xhtml+xml"},
-    ).mock(return_value=httpx.Response(200, text="<html></html>"))
+    _mock_doi_link(doi)
     respx.get(f"https://doi.org/{doi}").mock(
-        return_value=httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+        return_value=httpx.Response(
+            200, text="<html></html>", headers={"content-type": "text/html"}
+        )
     )
     respx.get(f"https://api.crossref.org/works/{doi}").mock(return_value=httpx.Response(404))
     ref = CSLItem(id="r2c", title="A study of things", doi=doi)
@@ -176,12 +163,11 @@ async def test_doi_browser_link_resolves_without_csl_json_is_not_invalid() -> No
 @respx.mock
 async def test_doi_csl_missing_but_crossref_title_matches_is_verified() -> None:
     doi = "10.1000/crossref-only"
-    respx.get(
-        f"https://doi.org/{doi}",
-        headers__contains={"Accept": "text/html,application/xhtml+xml"},
-    ).mock(return_value=httpx.Response(200, text="<html></html>"))
+    _mock_doi_link(doi)
     respx.get(f"https://doi.org/{doi}").mock(
-        return_value=httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+        return_value=httpx.Response(
+            200, text="<html></html>", headers={"content-type": "text/html"}
+        )
     )
     respx.get(f"https://api.crossref.org/works/{doi}").mock(
         return_value=httpx.Response(
@@ -217,13 +203,7 @@ async def test_doi_redirect_counts_as_resolved_even_if_publisher_blocks_bot() ->
             headers={"location": "https://publisher.example/blocked"},
         )
     )
-    respx.get(f"https://doi.org/{doi}").mock(
-        return_value=httpx.Response(
-            200,
-            json=_doi_csl("A study of things", "Kim", 2024, doi),
-            headers={"content-type": "application/vnd.citationstyles.csl+json"},
-        )
-    )
+    _mock_doi_csl(doi, "A study of things", "Kim", 2024)
     respx.get(f"https://api.crossref.org/works/{doi}").mock(
         return_value=httpx.Response(
             200, json=_crossref_work("A study of things", "Kim", 2024, doi)
