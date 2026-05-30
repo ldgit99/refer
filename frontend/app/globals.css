@@ -3,8 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --background: #f8fafc;
-  --foreground: #020617;
+  --background: #eff8f7;
+  --foreground: #123634;
+  --primary-teal: #2ba8a2;
+  --primary-dark: #1e8c86;
+  --accent-gold: #ffd23f;
+  --coral: #ef6c4a;
+  --cream: #fff8e7;
+  --sky-blue: #5dade2;
 }
 
 * {
@@ -25,4 +31,21 @@ button,
 input,
 select {
   font: inherit;
+}
+
+button,
+a,
+label {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+button:active,
+a:active,
+label:active {
+  transform: scale(0.98);
 }

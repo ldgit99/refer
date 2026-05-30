@@ -15,9 +15,15 @@ import {
 type PatchFilter = "all" | "selected" | "critical" | "warning" | "F1" | "F2" | "F3";
 
 const SEVERITY_STYLES: Record<Severity, string> = {
-  CRITICAL: "border-red-200 bg-red-50 text-red-800",
-  WARNING: "border-amber-200 bg-amber-50 text-amber-800",
-  INFO: "border-blue-200 bg-blue-50 text-blue-800",
+  CRITICAL: "border-[#EF6C4A]/30 bg-[#FFF0EC] text-[#B84428]",
+  WARNING: "border-[#FFD23F]/50 bg-[#FFF8D8] text-[#8A6A00]",
+  INFO: "border-[#5DADE2]/35 bg-[#EAF5FC] text-[#1F6F9F]",
+};
+
+const SOURCE_ACCENT: Record<Patch["source"], string> = {
+  F1: "border-l-[#2BA8A2]",
+  F2: "border-l-[#FFD23F]",
+  F3: "border-l-[#5DADE2]",
 };
 
 const FILTERS: Array<{ id: PatchFilter; label: string }> = [
@@ -131,19 +137,19 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-28 text-slate-950">
+    <main className="min-h-screen bg-[#EFF8F7] pb-28 text-[#123634]">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
+        <header className="flex flex-col gap-4 border-b-2 border-dashed border-[#2BA8A2]/30 pb-6 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">refer</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            <h1 className="text-3xl font-extrabold tracking-wide text-[#1E8C86]">refer</h1>
+            <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#34605C]">
               논문 문서의 본문 인용, 참고문헌, DOI 링크를 검토하고 선택한 수정 제안만
               반영한 검토본을 다운로드합니다.
             </p>
           </div>
           {result && (
-            <div className="text-sm text-slate-500">
-              <span className="font-medium text-slate-800">{result.filename}</span>
+            <div className="rounded-full border border-[#2BA8A2]/20 bg-white px-4 py-2 text-sm text-[#34605C] shadow-[0_4px_20px_rgba(43,168,162,0.10)]">
+              <span className="font-bold text-[#1E8C86]">{result.filename}</span>
               <span className="ml-2 uppercase">{result.original_format}</span>
             </div>
           )}
@@ -159,7 +165,7 @@ export default function Home() {
         />
 
         {error && (
-          <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <p className="mt-4 rounded-md border border-[#EF6C4A]/30 bg-[#FFF0EC] p-3 text-sm font-medium text-[#B84428] shadow-[0_4px_20px_rgba(239,108,74,0.14)]">
             {error}
           </p>
         )}
@@ -225,16 +231,16 @@ function UploadPanel({
   return (
     <form
       onSubmit={onSubmit}
-      className="mt-6 grid gap-4 rounded-md border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_auto]"
+      className="mt-6 grid gap-4 rounded-md border border-[#2BA8A2]/20 bg-white p-4 shadow-[0_4px_20px_rgba(43,168,162,0.10)] md:grid-cols-[1fr_auto]"
     >
       <label
         htmlFor="paper"
-        className="flex min-h-28 cursor-pointer flex-col justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-3 transition hover:border-slate-400 hover:bg-white"
+        className="flex min-h-28 cursor-pointer flex-col justify-center rounded-md border-2 border-dashed border-[#2BA8A2]/35 bg-[#FFF8E7] px-4 py-3 hover:border-[#2BA8A2] hover:bg-white hover:shadow-[0_4px_20px_rgba(43,168,162,0.14)]"
       >
-        <span className="text-sm font-medium text-slate-900">
+        <span className="text-sm font-bold text-[#1E8C86]">
           {file ? file.name : "DOCX, HWP, HWPX 파일 선택"}
         </span>
-        <span className="mt-1 text-xs leading-5 text-slate-500">
+        <span className="mt-1 text-xs font-medium leading-5 text-[#5E7E7A]">
           참고문헌과 본문 인용을 함께 검토할 논문 파일을 업로드하세요.
         </span>
         <input
@@ -251,7 +257,7 @@ function UploadPanel({
         <button
           type="submit"
           disabled={!file || loading}
-          className="rounded-md bg-slate-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-full bg-[#FFD23F] px-5 py-2.5 text-sm font-extrabold text-[#123634] shadow-[0_4px_20px_rgba(255,210,63,0.40)] hover:bg-[#FFE47A] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {loading ? "검토 중..." : "검토 시작"}
         </button>
@@ -304,38 +310,38 @@ function SummaryTile({
 }) {
   const toneClass =
     tone === "ok"
-      ? "border-emerald-200 bg-emerald-50"
+      ? "border-[#2BA8A2]/25 bg-white border-l-[#2BA8A2]"
       : tone === "warning"
-        ? "border-amber-200 bg-amber-50"
-        : "border-slate-200 bg-white";
+        ? "border-[#FFD23F]/45 bg-[#FFF8E7] border-l-[#FFD23F]"
+        : "border-[#2BA8A2]/15 bg-white border-l-[#5DADE2]";
   return (
-    <div className={`rounded-md border p-4 shadow-sm ${toneClass}`}>
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+    <div className={`rounded-md border border-l-4 p-4 shadow-[0_4px_20px_rgba(43,168,162,0.10)] ${toneClass}`}>
+      <div className="text-xs font-extrabold uppercase tracking-wide text-[#5E7E7A]">
         {label}
       </div>
-      <div className="mt-2 text-2xl font-semibold text-slate-950">{value}</div>
+      <div className="mt-2 text-2xl font-extrabold text-[#123634]">{value}</div>
     </div>
   );
 }
 
 function IssuePanel({ result }: { result: JobResult }) {
   return (
-    <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-md border border-[#2BA8A2]/20 bg-white p-4 shadow-[0_4px_20px_rgba(43,168,162,0.10)]">
       <PanelTitle title="인용 이슈" count={result.match_report.issues.length} />
       <ul className="mt-3 space-y-2">
         {result.match_report.issues.map((issue, i) => (
-          <li key={`${issue.type}-${i}`} className="rounded-md border border-slate-200 p-3">
+          <li key={`${issue.type}-${i}`} className="rounded-md border border-[#2BA8A2]/15 border-l-4 border-l-[#EF6C4A] bg-white p-3">
             <div className="flex flex-wrap items-center gap-2">
               <SeverityBadge severity={issue.severity} label={issue.type} />
               {issue.paragraph_index !== null && issue.paragraph_index !== undefined && (
-                <span className="text-xs text-slate-500">문단 {issue.paragraph_index + 1}</span>
+                <span className="text-xs font-medium text-[#5E7E7A]">문단 {issue.paragraph_index + 1}</span>
               )}
             </div>
-            <p className="mt-2 text-sm leading-6 text-slate-700">{issue.message}</p>
+            <p className="mt-2 text-sm leading-6 text-[#34605C]">{issue.message}</p>
           </li>
         ))}
         {result.match_report.issues.length === 0 && (
-          <li className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">
+          <li className="rounded-md border border-[#2BA8A2]/20 bg-[#E8F6F5] p-3 text-sm font-medium text-[#1E8C86]">
             인용-참고문헌 정합성 문제가 발견되지 않았습니다.
           </li>
         )}
@@ -346,11 +352,11 @@ function IssuePanel({ result }: { result: JobResult }) {
 
 function DoiPanel({ items }: { items: VerifiedItem[] }) {
   return (
-    <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-md border border-[#2BA8A2]/20 bg-white p-4 shadow-[0_4px_20px_rgba(43,168,162,0.10)]">
       <PanelTitle title="DOI 검증" count={items.length} />
       <div className="mt-3 space-y-2">
         {items.map((item) => (
-          <article key={item.ref_id} className="rounded-md border border-slate-200 p-3">
+          <article key={item.ref_id} className="rounded-md border border-[#2BA8A2]/15 border-l-4 border-l-[#5DADE2] bg-white p-3">
             <div className="flex flex-wrap items-center gap-2">
               <SeverityBadge severity={item.severity} label={item.status} />
               <StatusPill ok={item.doi_resolves} label="링크" />
@@ -361,24 +367,24 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
                 href={item.doi_url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 block break-all text-sm text-blue-700 underline"
+                className="mt-2 block break-all text-sm font-medium text-[#1F6F9F] underline decoration-[#5DADE2]/40 underline-offset-4"
               >
                 {item.doi_url}
               </a>
             )}
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs font-medium text-[#5E7E7A]">
               신뢰도 {(item.confidence * 100).toFixed(0)}%
             </p>
             {item.matched_title && (
-              <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-700">
+              <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#34605C]">
                 {item.matched_title}
               </p>
             )}
-            {item.note && <p className="mt-2 text-xs leading-5 text-slate-500">{item.note}</p>}
+            {item.note && <p className="mt-2 text-xs leading-5 text-[#5E7E7A]">{item.note}</p>}
           </article>
         ))}
         {items.length === 0 && (
-          <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+          <p className="rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-3 text-sm text-[#34605C]">
             DOI 메타데이터가 반환되지 않았습니다.
           </p>
         )}
@@ -411,8 +417,8 @@ function PatchWorkspace({
   onTogglePatch: (id: string) => void;
 }) {
   return (
-    <section className="rounded-md border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 p-4">
+    <section className="rounded-md border border-[#2BA8A2]/20 bg-white shadow-[0_4px_20px_rgba(43,168,162,0.10)]">
+      <div className="border-b-2 border-dashed border-[#2BA8A2]/20 p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <PanelTitle title="수정 제안" count={totalPatchCount} />
           <div className="flex flex-wrap gap-1">
@@ -421,10 +427,10 @@ function PatchWorkspace({
                 key={item.id}
                 type="button"
                 onClick={() => onFilterChange(item.id)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                className={`rounded-full px-3 py-1.5 text-xs font-bold ${
                   filter === item.id
-                    ? "bg-slate-950 text-white"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    ? "bg-[#2BA8A2] text-white shadow-[0_4px_20px_rgba(43,168,162,0.30)]"
+                    : "bg-[#E8F6F5] text-[#1E8C86] hover:bg-white hover:shadow-[0_4px_20px_rgba(43,168,162,0.12)]"
                 }`}
               >
                 {item.label}
@@ -435,7 +441,7 @@ function PatchWorkspace({
       </div>
 
       <div className="grid min-h-[520px] lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="border-b border-slate-200 lg:border-b-0 lg:border-r">
+        <div className="border-b border-[#2BA8A2]/15 lg:border-b-0 lg:border-r">
           <div className="max-h-[640px] overflow-y-auto p-3">
             <PatchList
               activePatchId={activePatch?.id ?? ""}
@@ -457,7 +463,7 @@ function PatchWorkspace({
               onToggle={() => onTogglePatch(activePatch.id)}
             />
           ) : (
-            <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">
+            <p className="rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-4 text-sm text-[#34605C]">
               표시할 수정 제안이 없습니다.
             </p>
           )}
@@ -482,7 +488,7 @@ function PatchList({
 }) {
   if (patches.length === 0) {
     return (
-      <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+      <p className="rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-3 text-sm text-[#34605C]">
         이 필터에 해당하는 수정 제안이 없습니다.
       </p>
     );
@@ -497,10 +503,10 @@ function PatchList({
             <button
               type="button"
               onClick={() => onPatchActivate(patch.id)}
-              className={`w-full rounded-md border p-3 text-left transition ${
+              className={`w-full rounded-md border border-l-4 p-3 text-left ${SOURCE_ACCENT[patch.source]} ${
                 active
-                  ? "border-slate-900 bg-slate-50"
-                  : "border-slate-200 bg-white hover:border-slate-300"
+                  ? "border-[#2BA8A2] bg-[#E8F6F5] shadow-[0_4px_20px_rgba(43,168,162,0.18)]"
+                  : "border-[#2BA8A2]/15 bg-white hover:border-[#2BA8A2]/40 hover:shadow-[0_4px_20px_rgba(43,168,162,0.10)]"
               }`}
             >
               <div className="flex items-start gap-2">
@@ -513,19 +519,19 @@ function PatchList({
                   }}
                   onClick={(event) => event.stopPropagation()}
                   aria-label={`${patch.id} 선택`}
-                  className="mt-1 h-4 w-4"
+                  className="mt-1 h-4 w-4 accent-[#2BA8A2]"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <SeverityBadge severity={patch.severity} label={patch.source} />
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                    <span className="rounded-full bg-[#FFF8E7] px-2 py-0.5 text-xs font-bold text-[#8A6A00]">
                       {patch.kind}
                     </span>
                   </div>
-                  <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-800">
+                  <p className="mt-2 line-clamp-2 text-sm font-medium leading-5 text-[#123634]">
                     {patch.comment || patch.after || patch.before || "수정 제안"}
                   </p>
-                  <p className="mt-2 text-xs text-slate-500">
+                  <p className="mt-2 text-xs font-medium text-[#5E7E7A]">
                     신뢰도 {(patch.confidence * 100).toFixed(0)}%
                   </p>
                 </div>
@@ -553,19 +559,19 @@ function PatchDetail({
 }) {
   return (
     <article>
-      <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-start md:justify-between">
+      <div className="flex flex-col gap-3 border-b-2 border-dashed border-[#2BA8A2]/20 pb-4 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <SeverityBadge severity={patch.severity} label={patch.source} />
-            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-700">
+            <span className="rounded-full bg-[#FFF8E7] px-2 py-1 text-xs font-bold text-[#8A6A00]">
               {patch.kind}
             </span>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs font-medium text-[#5E7E7A]">
               문단 {patch.target.paragraph_index + 1}
             </span>
           </div>
-          <h3 className="mt-3 text-lg font-semibold text-slate-950">수정 제안 상세</h3>
-          <p className="mt-1 text-sm text-slate-600">
+          <h3 className="mt-3 text-lg font-extrabold text-[#123634]">수정 제안 상세</h3>
+          <p className="mt-1 text-sm font-medium text-[#5E7E7A]">
             신뢰도 {(patch.confidence * 100).toFixed(0)}% · {patch.id}
           </p>
         </div>
@@ -573,17 +579,17 @@ function PatchDetail({
           <button
             type="button"
             onClick={onCopyAfter}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+            className="rounded-full border border-[#2BA8A2]/30 bg-white px-3 py-2 text-sm font-bold text-[#1E8C86] hover:bg-[#E8F6F5] hover:shadow-[0_4px_20px_rgba(43,168,162,0.12)]"
           >
             {copied ? "복사됨" : "제안 복사"}
           </button>
           <button
             type="button"
             onClick={onToggle}
-            className={`rounded-md px-3 py-2 text-sm font-medium ${
+            className={`rounded-full px-3 py-2 text-sm font-extrabold ${
               selected
-                ? "bg-slate-950 text-white hover:bg-slate-800"
-                : "border border-slate-300 text-slate-800 hover:bg-slate-50"
+                ? "bg-[#FFD23F] text-[#123634] shadow-[0_4px_20px_rgba(255,210,63,0.40)] hover:bg-[#FFE47A]"
+                : "border border-[#2BA8A2]/30 text-[#1E8C86] hover:bg-[#E8F6F5]"
             }`}
           >
             {selected ? "선택됨" : "선택"}
@@ -597,11 +603,11 @@ function PatchDetail({
       </div>
 
       {patch.comment && (
-        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className="mt-4 rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-4">
+          <div className="text-xs font-extrabold uppercase tracking-wide text-[#5E7E7A]">
             검토 메모
           </div>
-          <p className="mt-2 text-sm leading-6 text-slate-700">{patch.comment}</p>
+          <p className="mt-2 text-sm leading-6 text-[#34605C]">{patch.comment}</p>
         </div>
       )}
     </article>
@@ -619,14 +625,14 @@ function DiffBlock({
 }) {
   const toneClass =
     tone === "before"
-      ? "border-red-100 bg-red-50/60"
-      : "border-emerald-100 bg-emerald-50/70";
+      ? "border-[#EF6C4A]/20 bg-[#FFF0EC]"
+      : "border-[#2BA8A2]/20 bg-[#E8F6F5]";
   return (
     <div className={`rounded-md border p-4 ${toneClass}`}>
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <div className="text-xs font-extrabold uppercase tracking-wide text-[#5E7E7A]">
         {label}
       </div>
-      <p className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-6 text-slate-900">
+      <p className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-6 text-[#123634]">
         {text}
       </p>
     </div>
@@ -653,10 +659,10 @@ function ApplyBar({
   onModeChange: (mode: OutputMode) => void;
 }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur">
+    <div className="fixed inset-x-0 bottom-0 border-t border-[#2BA8A2]/20 bg-white/95 px-4 py-3 shadow-[0_-8px_32px_rgba(43,168,162,0.14)] backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="text-sm text-slate-700">
-          <span className="font-medium text-slate-950">{selectedCount}</span> 선택 ·{" "}
+        <div className="text-sm font-medium text-[#34605C]">
+          <span className="font-extrabold text-[#1E8C86]">{selectedCount}</span> 선택 ·{" "}
           <span>{rejectedCount}</span> 제외 · <span>{totalCount}</span> 전체
         </div>
         <div className="sm:ml-auto">
@@ -666,14 +672,14 @@ function ApplyBar({
           type="button"
           onClick={onApply}
           disabled={applying}
-          className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-full bg-[#FFD23F] px-5 py-2 text-sm font-extrabold text-[#123634] shadow-[0_4px_20px_rgba(255,210,63,0.40)] hover:bg-[#FFE47A] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {applying ? "반영 중..." : "선택 항목 반영"}
         </button>
         {downloadHref && (
           <a
             href={downloadHref}
-            className="rounded-md border border-slate-300 px-4 py-2 text-center text-sm font-medium text-slate-900 hover:bg-slate-50"
+            className="rounded-full border border-[#2BA8A2]/30 bg-white px-4 py-2 text-center text-sm font-bold text-[#1E8C86] hover:bg-[#E8F6F5] hover:shadow-[0_4px_20px_rgba(43,168,162,0.12)]"
           >
             검토본 다운로드
           </a>
@@ -695,20 +701,20 @@ function ModeControl({
   return (
     <div>
       {!compact && (
-        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+        <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[#5E7E7A]">
           출력 방식
         </div>
       )}
-      <div className="inline-flex rounded-md border border-slate-200 bg-slate-100 p-1">
+      <div className="inline-flex rounded-full border border-[#2BA8A2]/20 bg-[#E8F6F5] p-1">
         {(Object.keys(MODE_LABELS) as OutputMode[]).map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => onModeChange(item)}
-            className={`rounded px-3 py-1.5 text-xs font-medium transition ${
+            className={`rounded-full px-3 py-1.5 text-xs font-bold ${
               mode === item
-                ? "bg-white text-slate-950 shadow-sm"
-                : "text-slate-600 hover:text-slate-950"
+                ? "bg-white text-[#1E8C86] shadow-[0_2px_8px_rgba(43,168,162,0.12)]"
+                : "text-[#5E7E7A] hover:text-[#1E8C86]"
             }`}
           >
             {MODE_LABELS[item]}
@@ -721,11 +727,11 @@ function ModeControl({
 
 function PanelTitle({ count, title }: { count: number; title: string }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <div className="flex items-center justify-between gap-3 border-b-2 border-dashed border-[#2BA8A2]/15 pb-2">
+      <h2 className="text-sm font-extrabold uppercase tracking-wide text-[#1E8C86]">
         {title}
       </h2>
-      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+      <span className="rounded-full bg-[#FFF8E7] px-2 py-0.5 text-xs font-extrabold text-[#8A6A00]">
         {count}
       </span>
     </div>
@@ -735,7 +741,7 @@ function PanelTitle({ count, title }: { count: number; title: string }) {
 function SeverityBadge({ label, severity }: { label: string; severity: Severity }) {
   return (
     <span
-      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${
+      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-bold ${
         SEVERITY_STYLES[severity]
       }`}
     >
@@ -753,13 +759,13 @@ function StatusPill({
 }) {
   const className =
     ok === true
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      ? "border-[#2BA8A2]/25 bg-[#E8F6F5] text-[#1E8C86]"
       : ok === false
-        ? "border-red-200 bg-red-50 text-red-700"
-        : "border-slate-200 bg-slate-50 text-slate-500";
+        ? "border-[#EF6C4A]/30 bg-[#FFF0EC] text-[#B84428]"
+        : "border-[#5DADE2]/30 bg-[#EAF5FC] text-[#1F6F9F]";
   const suffix = ok === true ? "OK" : ok === false ? "실패" : "대기";
   return (
-    <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${className}`}>
+    <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${className}`}>
       {label} {suffix}
     </span>
   );
