@@ -9,6 +9,9 @@ from app.verifier.verify import VerifiedItem
 
 
 class FailingCrossrefClient:
+    async def doi_url_resolves(self, doi: str):  # noqa: ANN201, ARG002
+        raise RuntimeError("doi.org unavailable")
+
     async def resolve_doi_csl(self, doi: str):  # noqa: ANN201, ARG002
         raise RuntimeError("doi.org unavailable")
 
