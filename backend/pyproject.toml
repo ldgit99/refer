@@ -1,0 +1,69 @@
+[project]
+name = "refer-backend"
+version = "0.1.0"
+description = "Academic citation & reference review multi-agent backend (FastAPI + LangGraph)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.12",
+    "python-docx>=1.1",
+    "lxml>=5.3",
+    "rapidfuzz>=3.10",
+    "httpx>=0.28",
+    "tenacity>=9.0",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+]
+
+[project.optional-dependencies]
+# Heavier / optional features layered in per-milestone so CI stays fast.
+agents = [
+    "langgraph>=0.2.50",
+    "langchain-anthropic>=0.3",
+    "langchain-core>=0.3",
+]
+queue = [
+    "redis>=5.2",
+    "arq>=0.26",
+]
+format = [
+    "citeproc-py>=0.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "respx>=0.22",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = false
+no_implicit_optional = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
