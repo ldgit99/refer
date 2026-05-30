@@ -18,6 +18,15 @@ def test_healthz() -> None:
     assert body["formats"]["hwp"]["download_format"] == "hwpx"
 
 
+def test_healthz_llm() -> None:
+    resp = client.get("/healthz/llm")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] in {"ok", "disabled", "unsupported", "error"}
+    assert "detail" in body
+    assert "api_key" not in body
+
+
 def test_root() -> None:
     resp = client.get("/")
     assert resp.status_code == 200

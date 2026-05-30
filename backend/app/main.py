@@ -9,6 +9,7 @@ from app import __version__
 from app.api.routes import router as api_router
 from app.capabilities import document_capabilities
 from app.config import get_settings
+from app.llm.health import LLMHealth, check_llm_health
 
 settings = get_settings()
 
@@ -41,6 +42,12 @@ def healthz() -> dict[str, object]:
         "f3_enabled": settings.f3_enabled,
         "formats": document_capabilities(),
     }
+
+
+@app.get("/healthz/llm", response_model=LLMHealth, tags=["meta"])
+async def healthz_llm() -> LLMHealth:
+    """Verify configured LLM provider connectivity without exposing secrets."""
+    return await check_llm_health(settings)
 
 
 @app.get("/", tags=["meta"])
