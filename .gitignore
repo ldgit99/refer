@@ -31,6 +31,10 @@ Thumbs.db
 .idea/
 .vscode/
 
+# --- Claude Code local session settings (not the committed harness catalog) ---
+.claude/settings/
+.claude/settings.local.json
+
 # --- Project local artifacts ---
 *_old.md
 STATUS.md
