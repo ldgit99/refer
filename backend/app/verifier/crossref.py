@@ -78,6 +78,22 @@ class CrossrefClient:
         stop=stop_after_attempt(3),
         reraise=True,
     )
+    async def doi_url_resolves(self, doi: str) -> bool:
+        """Check whether the DOI URL resolves like a browser link."""
+        doi_norm = doi.strip().lower()
+        resp = await self.client.get(
+            f"https://doi.org/{doi_norm}",
+            headers={**_headers(), "Accept": "text/html,application/xhtml+xml"},
+            follow_redirects=True,
+        )
+        return resp.status_code < 400
+
+    @retry(
+        retry=retry_if_exception_type(httpx.TransportError),
+        wait=wait_exponential(multiplier=0.5, max=8),
+        stop=stop_after_attempt(3),
+        reraise=True,
+    )
     async def resolve_doi_csl(self, doi: str) -> dict | None:
         """Resolve a DOI URL and request CSL JSON metadata from doi.org."""
         doi_norm = doi.strip().lower()

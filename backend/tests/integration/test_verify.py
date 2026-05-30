@@ -37,6 +37,9 @@ def _doi_csl(title: str, family: str, year: int, doi: str) -> dict:
 @respx.mock
 async def test_valid_doi_verified() -> None:
     doi = "10.1000/xyz"
+    respx.get(f"https://doi.org/{doi}", headers__contains={"Accept": "text/html,application/xhtml+xml"}).mock(
+        return_value=httpx.Response(200, text="<html></html>")
+    )
     respx.get(f"https://doi.org/{doi}").mock(
         return_value=httpx.Response(
             200,
@@ -85,6 +88,9 @@ async def test_invalid_doi_flagged() -> None:
 async def test_doi_mismatch_downgraded() -> None:
     """EvidenceCritic-style guard: DOI exists but metadata disagrees."""
     doi = "10.1000/realbutwrong"
+    respx.get(f"https://doi.org/{doi}", headers__contains={"Accept": "text/html,application/xhtml+xml"}).mock(
+        return_value=httpx.Response(200, text="<html></html>")
+    )
     respx.get(f"https://doi.org/{doi}").mock(
         return_value=httpx.Response(
             200,
@@ -114,8 +120,11 @@ async def test_doi_mismatch_downgraded() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_doi_link_resolves_but_crossref_missing_is_invalid() -> None:
+async def test_doi_link_resolves_but_crossref_missing_is_not_found() -> None:
     doi = "10.1000/resolver-only"
+    respx.get(f"https://doi.org/{doi}", headers__contains={"Accept": "text/html,application/xhtml+xml"}).mock(
+        return_value=httpx.Response(200, text="<html></html>")
+    )
     respx.get(f"https://doi.org/{doi}").mock(
         return_value=httpx.Response(
             200,
@@ -135,7 +144,62 @@ async def test_doi_link_resolves_but_crossref_missing_is_invalid() -> None:
     )
     async with CrossrefClient() as client:
         result = await verify_reference(ref, client)
-    assert result.status == "invalid_doi"
+    assert result.status == "not_found"
+    assert result.doi_resolves is True
+    assert result.title_matches is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_doi_browser_link_resolves_without_csl_json_is_not_invalid() -> None:
+    doi = "10.1000/html-only"
+    respx.get(
+        f"https://doi.org/{doi}",
+        headers__contains={"Accept": "text/html,application/xhtml+xml"},
+    ).mock(return_value=httpx.Response(200, text="<html></html>"))
+    respx.get(f"https://doi.org/{doi}").mock(
+        return_value=httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+    )
+    respx.get(f"https://api.crossref.org/works/{doi}").mock(return_value=httpx.Response(404))
+    ref = CSLItem(id="r2c", title="A study of things", doi=doi)
+
+    async with CrossrefClient() as client:
+        result = await verify_reference(ref, client)
+
+    assert result.status == "not_found"
+    assert result.severity == "WARNING"
+    assert result.doi_resolves is True
+    assert result.title_matches is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_doi_csl_missing_but_crossref_title_matches_is_verified() -> None:
+    doi = "10.1000/crossref-only"
+    respx.get(
+        f"https://doi.org/{doi}",
+        headers__contains={"Accept": "text/html,application/xhtml+xml"},
+    ).mock(return_value=httpx.Response(200, text="<html></html>"))
+    respx.get(f"https://doi.org/{doi}").mock(
+        return_value=httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+    )
+    respx.get(f"https://api.crossref.org/works/{doi}").mock(
+        return_value=httpx.Response(
+            200, json=_crossref_work("A study of things", "Kim", 2024, doi)
+        )
+    )
+    ref = CSLItem(
+        id="r2d",
+        title="A study of things",
+        author=[CSLName(family="Kim")],
+        issued_year=2024,
+        doi=doi,
+    )
+
+    async with CrossrefClient() as client:
+        result = await verify_reference(ref, client)
+
+    assert result.status == "verified"
     assert result.doi_resolves is True
     assert result.title_matches is True
 

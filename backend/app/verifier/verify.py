@@ -96,16 +96,51 @@ async def _verify_existing_doi(
     settings = get_settings()
     doi_url = f"https://doi.org/{doi}"
 
-    resolver_msg = await client.resolve_doi_csl(doi)
+    doi_resolves = await client.doi_url_resolves(doi)
+    resolver_msg = await client.resolve_doi_csl(doi) if doi_resolves else None
     if resolver_msg is None:
+        crossref_msg = await client.get_work(doi) if doi_resolves else None
+        if crossref_msg is not None:
+            crossref_meta = CSLItem.from_crossref(ref.id, crossref_msg)
+            confidence, note = compare_metadata(ref, crossref_meta)
+            title_matches = confidence >= settings.doi_title_confidence
+            if title_matches:
+                return VerifiedItem(
+                    ref_id=ref.id,
+                    status="verified",
+                    confidence=confidence,
+                    doi_url=doi_url,
+                    doi_resolves=True,
+                    title_matches=True,
+                    matched_title=crossref_meta.title,
+                    severity="INFO",
+                    note=note or "DOI URL resolves; verified with Crossref metadata.",
+                )
+            return VerifiedItem(
+                ref_id=ref.id,
+                status="doi_mismatch",
+                confidence=confidence,
+                doi_url=doi_url,
+                doi_resolves=True,
+                title_matches=False,
+                matched_title=crossref_meta.title,
+                severity="WARNING",
+                note=note
+                or "DOI URL resolves, but Crossref title metadata does not match the reference title.",
+            )
+
         return VerifiedItem(
             ref_id=ref.id,
-            status="invalid_doi",
-            severity="CRITICAL",
+            status="not_found" if doi_resolves else "invalid_doi",
+            severity="WARNING" if doi_resolves else "CRITICAL",
             doi_url=doi_url,
-            doi_resolves=False,
-            title_matches=False,
-            note=f"DOI URL {doi_url} did not resolve to usable metadata.",
+            doi_resolves=doi_resolves,
+            title_matches=None if doi_resolves else False,
+            note=(
+                "DOI URL resolves, but usable DOI metadata was not found."
+                if doi_resolves
+                else f"DOI URL {doi_url} did not resolve."
+            ),
         )
 
     resolver_meta = CSLItem.from_csl_json(ref.id, resolver_msg)
@@ -116,13 +151,13 @@ async def _verify_existing_doi(
     if crossref_msg is None:
         return VerifiedItem(
             ref_id=ref.id,
-            status="invalid_doi",
+            status="not_found",
             confidence=resolver_confidence,
             doi_url=doi_url,
             doi_resolves=True,
             title_matches=resolver_title_matches,
             matched_title=resolver_meta.title,
-            severity="CRITICAL",
+            severity="WARNING",
             note="DOI URL resolves, but Crossref did not return a work record.",
         )
 
