@@ -274,7 +274,7 @@ function SummaryBand({
   ).length;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
       <SummaryTile label="본문 인용" value={result.match_report.stats.citations ?? 0} />
       <SummaryTile label="참고문헌" value={result.match_report.stats.references ?? 0} />
       <SummaryTile label="이슈" value={issueCount} tone={issueCount > 0 ? "warning" : "ok"} />
@@ -283,6 +283,11 @@ function SummaryBand({
         label="선택됨 / DOI 경고"
         value={`${selectedCount} / ${doiFailed}`}
         tone={doiFailed > 0 ? "warning" : "ok"}
+      />
+      <SummaryTile
+        label="LLM"
+        value={result.llm_used ? "ON" : "OFF"}
+        tone={result.llm_used ? "ok" : "neutral"}
       />
     </div>
   );

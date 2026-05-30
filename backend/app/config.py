@@ -68,6 +68,8 @@ class Settings(BaseSettings):
         back to Anthropic for backward compatibility.
         """
         provider = self.llm_provider.lower().strip()
+        if provider in {"none", "off", "disabled"}:
+            return None
         if provider == "openai":
             return "openai" if self.openai_api_key else None
         if provider == "anthropic":

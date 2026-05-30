@@ -63,6 +63,7 @@ export interface JobResult {
   patches: Patch[];
   critics?: Record<string, unknown>;
   hitl_queue?: unknown[];
+  llm_used?: boolean;
 }
 
 async function parseError(resp: Response): Promise<string> {

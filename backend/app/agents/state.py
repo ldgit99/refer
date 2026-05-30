@@ -58,6 +58,7 @@ class ReviewState(TypedDict, total=False):
     consistency: CriticVerdict
     hitl_queue: list[ConflictItem]
     revision_counts: dict[str, int]
+    llm_used: bool
     # D1
     patch_proposals: list[Patch]
     accepted_patches: list[str]

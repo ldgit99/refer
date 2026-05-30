@@ -11,6 +11,7 @@ import os
 
 os.environ.setdefault("F3_ENABLED", "false")
 os.environ.setdefault("CROSSREF_POLITE_EMAIL", "test@example.com")
+os.environ.setdefault("LLM_PROVIDER", "none")
 
 from app.config import get_settings  # noqa: E402
 

@@ -15,6 +15,7 @@ from app.citation.formatter import format_apa
 from app.citation.matcher import MatchReport, match
 from app.citation.ref_to_csl import reference_to_csl
 from app.citation.references import ReferenceItem, parse_references
+from app.llm.reference_parser import refine_references_with_llm
 from app.parsers.base import ParsedDocument
 from app.verifier.crossref import CrossrefClient
 from app.verifier.verify import VerifiedItem, verify_reference
@@ -29,6 +30,7 @@ class ReviewResult(BaseModel):
     formatted: dict[str, str] = Field(default_factory=dict)  # ref_id -> APA string
     verified: dict[str, VerifiedItem] = Field(default_factory=dict)
     patches: list[Patch] = Field(default_factory=list)
+    llm_used: bool = False
 
 
 def _ref_paragraph_index(document: ParsedDocument, ref: ReferenceItem) -> int:
@@ -140,6 +142,17 @@ def _f1_f2(document: ParsedDocument) -> tuple[MatchReport, list[CSLItem], dict[s
     return report, csl_items, formatted
 
 
+async def _f1_f2_with_optional_llm(
+    document: ParsedDocument,
+) -> tuple[MatchReport, list[CSLItem], dict[str, str], bool]:
+    citations = extract_citations(document)
+    references = parse_references(document.references_section)
+    references, csl_items, llm_used = await refine_references_with_llm(references)
+    report = match(citations, references)
+    formatted = {c.id: format_apa(c) for c in csl_items}
+    return report, csl_items, formatted, llm_used
+
+
 def _verification_failure_item(ref: CSLItem, exc: Exception) -> VerifiedItem:
     detail = str(exc).strip() or exc.__class__.__name__
     if len(detail) > MAX_VERIFICATION_ERROR_LEN:
@@ -166,6 +179,7 @@ def review_sync(document: ParsedDocument) -> ReviewResult:
         formatted=formatted,
         verified={},
         patches=patches,
+        llm_used=False,
     )
 
 
@@ -176,7 +190,7 @@ async def review_with_verification(
     """Full F1 + F2 + F3 review. Skips F3 gracefully when disabled or offline."""
     from app.config import get_settings
 
-    report, csl_items, formatted = _f1_f2(document)
+    report, csl_items, formatted, llm_used = await _f1_f2_with_optional_llm(document)
     verified: dict[str, VerifiedItem] = {}
 
     if client is None and not get_settings().f3_enabled:
@@ -187,6 +201,7 @@ async def review_with_verification(
             formatted=formatted,
             verified=verified,
             patches=patches,
+            llm_used=llm_used,
         )
 
     own_client = client is None
@@ -213,4 +228,5 @@ async def review_with_verification(
         formatted=formatted,
         verified=verified,
         patches=patches,
+        llm_used=llm_used,
     )

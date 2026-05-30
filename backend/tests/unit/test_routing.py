@@ -42,3 +42,16 @@ def test_forced_openai_requires_openai_key(monkeypatch) -> None:
         assert model_for("final") is None
     finally:
         get_settings.cache_clear()
+
+
+def test_llm_provider_none_disables_keys(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("LLM_PROVIDER", "none")
+    get_settings.cache_clear()
+    try:
+        settings = get_settings()
+        assert settings.llm_enabled is False
+        assert settings.active_llm_provider is None
+        assert model_for("trivial") is None
+    finally:
+        get_settings.cache_clear()

@@ -30,6 +30,7 @@ class JobResult(BaseModel):
     patches: list[Patch] = Field(default_factory=list)
     critics: dict[str, CriticVerdict] = Field(default_factory=dict)
     hitl_queue: list[ConflictItem] = Field(default_factory=list)
+    llm_used: bool = False
 
 
 class ApplyRequest(BaseModel):
