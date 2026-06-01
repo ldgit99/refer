@@ -48,6 +48,8 @@ export interface VerifiedItem {
   doi_resolves?: boolean | null;
   title_matches?: boolean | null;
   matched_title?: string | null;
+  /** Which metadata source confirmed the reference: crossref/doi.org/openalex/kci/none. */
+  source?: string;
   severity: Severity;
   note: string;
 }
@@ -64,6 +66,41 @@ export interface JobResult {
   critics?: Record<string, unknown>;
   hitl_queue?: unknown[];
   llm_used?: boolean;
+  revision_counts?: Record<string, number>;
+}
+
+/** Human-readable labels for F1 issue types (incl. duplicate_reference). */
+export const ISSUE_TYPE_LABELS: Record<string, string> = {
+  orphan_citation: "Orphan citation",
+  orphan_reference: "Uncited reference",
+  year_mismatch: "Year mismatch",
+  author_count_mismatch: "et al. rule",
+  duplicate_reference: "Duplicate reference",
+};
+
+/** Compact review statistics derived from a job result. */
+export function reviewStats(job: JobResult) {
+  const s = job.match_report.stats ?? {};
+  const citations = s.citations ?? 0;
+  const references = s.references ?? 0;
+  const issues = s.issues ?? 0;
+  const verifiedValues = Object.values(job.verified ?? {});
+  const verifiedOk = verifiedValues.filter(
+    (v) => v.status === "verified" || v.status === "verified_external",
+  ).length;
+  const matchRate =
+    citations > 0
+      ? Math.round((1 - (s.orphan_citation ?? 0) / citations) * 100)
+      : 100;
+  return {
+    citations,
+    references,
+    issues,
+    matchRate,
+    verifiedOk,
+    verifiedTotal: verifiedValues.length,
+    duplicates: s.duplicate_reference ?? 0,
+  };
 }
 
 async function parseError(resp: Response): Promise<string> {

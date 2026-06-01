@@ -102,6 +102,7 @@ async def create_job(file: Annotated[UploadFile, File()]) -> JobResult:
     job.hitl_queue = state.get("hitl_queue", [])
     job.status = "done"
     store.add_event(job.id, "done", f"{len(job.result.patches)} patches")
+    store.save(job)
 
     return _job_result(job)
 
@@ -139,6 +140,7 @@ async def apply_job(job_id: str, body: ApplyRequest) -> ApplyResponse:
     job.edited_bytes = edited
     job.status = "applied"
     store.add_event(job.id, "applied", f"{len(patches)} patches, mode={body.mode}")
+    store.save(job)
 
     return ApplyResponse(
         job_id=job.id,
@@ -187,6 +189,7 @@ async def resolve_hitl(job_id: str, body: HitlResolveRequest) -> HitlResolveResp
         if c.id == body.conflict_id:
             c.resolved = True
             c.resolution = body.choice
+            store.save(job)
             return HitlResolveResponse(
                 job_id=job.id, conflict_id=body.conflict_id, resolved=True
             )

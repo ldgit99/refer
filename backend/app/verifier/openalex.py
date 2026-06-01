@@ -60,3 +60,22 @@ class OpenAlexClient:
         )
         resp.raise_for_status()
         return resp.json().get("results", [])
+
+    async def search_title(self, title: str, per_page: int = 5) -> list[dict]:
+        """Title-scoped search; falls back to a general search on failure."""
+        if not title.strip():
+            return []
+        try:
+            resp = await self.client.get(
+                f"{OPENALEX_BASE}/works",
+                params=_params(
+                    {"filter": f"title.search:{title}", "per-page": str(per_page)}
+                ),
+            )
+            resp.raise_for_status()
+            results = resp.json().get("results", [])
+            if results:
+                return results
+        except httpx.HTTPError:
+            pass
+        return await self.search(title, per_page=per_page)

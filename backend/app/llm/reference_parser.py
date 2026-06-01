@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 
 from pydantic import BaseModel, Field, ValidationError
@@ -10,12 +11,15 @@ from app.citation.csl import CSLItem, CSLName
 from app.citation.ref_to_csl import reference_to_csl
 from app.citation.references import ReferenceItem
 from app.config import get_settings
-from app.llm.openai_client import ChatMessage, chat_json
+from app.llm import ChatMessage, chat_json
 from app.verifier.verify import extract_doi, normalize_doi
 
 ChatJSONFunc = Callable[[list[ChatMessage]], Awaitable[dict]]
 
-MAX_LLM_REFERENCES = 40
+# Per-request batch size. Larger reference lists are split across requests
+# (run concurrently) so no entries are dropped on long papers.
+LLM_BATCH_SIZE = 40
+MAX_LLM_BATCHES = 6  # cap total cost/time (≈240 references)
 MIN_PARSE_CONFIDENCE = 0.55
 
 
@@ -102,6 +106,17 @@ def _merge_csl_item(item: CSLItem, parsed: ParsedReference) -> CSLItem:
     )
 
 
+async def _parse_batch(
+    batch: list[ReferenceItem], chat: ChatJSONFunc
+) -> dict[int, ParsedReference]:
+    try:
+        payload = await chat(_prompt(batch))
+        parsed_batch = ParsedReferenceBatch.model_validate(payload)
+    except (ValidationError, RuntimeError, ValueError):
+        return {}
+    return {p.index: p for p in parsed_batch.references}
+
+
 async def refine_references_with_llm(
     references: list[ReferenceItem],
     *,
@@ -109,24 +124,25 @@ async def refine_references_with_llm(
 ) -> tuple[list[ReferenceItem], list[CSLItem], bool]:
     settings = get_settings()
     deterministic_csl = [reference_to_csl(r) for r in references]
-    if (
-        settings.active_llm_provider != "openai"
-        or not settings.openai_api_key
-        or not references
-    ):
+    if settings.active_llm_provider is None or not references:
         return references, deterministic_csl, False
 
-    batch = references[:MAX_LLM_REFERENCES]
-    try:
-        payload = await chat(_prompt(batch))
-        parsed_batch = ParsedReferenceBatch.model_validate(payload)
-    except (ValidationError, RuntimeError, ValueError):
+    # Split into batches and parse them concurrently (no 40-item truncation).
+    batches = [
+        references[i : i + LLM_BATCH_SIZE]
+        for i in range(0, len(references), LLM_BATCH_SIZE)
+    ][:MAX_LLM_BATCHES]
+    results = await asyncio.gather(*[_parse_batch(b, chat) for b in batches])
+
+    parsed_by_index: dict[int, ParsedReference] = {}
+    for chunk in results:
+        parsed_by_index.update(chunk)
+
+    if not parsed_by_index:
         return references, deterministic_csl, False
 
-    parsed_by_index = {p.index: p for p in parsed_batch.references}
     refined_refs: list[ReferenceItem] = []
     refined_csl: list[CSLItem] = []
-
     for ref, csl in zip(references, deterministic_csl, strict=True):
         parsed = parsed_by_index.get(ref.index)
         if parsed is None:
@@ -136,4 +152,4 @@ async def refine_references_with_llm(
         refined_refs.append(_merge_reference_item(ref, parsed))
         refined_csl.append(_merge_csl_item(csl, parsed))
 
-    return refined_refs, refined_csl, bool(parsed_by_index)
+    return refined_refs, refined_csl, True

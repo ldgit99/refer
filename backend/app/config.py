@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     llm_provider: str = "auto"
     crossref_polite_email: str | None = None
+    kci_api_key: str | None = None
     langsmith_api_key: str | None = None
     langsmith_tracing: bool = False
     redis_url: str = "redis://localhost:6379/0"
@@ -36,6 +37,10 @@ class Settings(BaseSettings):
     # (tests, air-gapped demos). When enabled, references are checked against
     # Crossref/OpenAlex live.
     f3_enabled: bool = True
+    # Max references verified concurrently (fan-out, research.md §7.7).
+    f3_concurrency: int = 8
+    # Use OpenAlex as a secondary verifier (preferred for Korean titles).
+    openalex_enabled: bool = True
 
     # --- model routing (research.md §7.7) ---
     model_trivial: str = "claude-haiku-4-5"

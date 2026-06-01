@@ -44,11 +44,27 @@ const MODE_LABELS: Record<OutputMode, string> = {
 
 const DOI_STATUS_LABELS: Record<string, string> = {
   verified: "검증됨",
+  verified_external: "외부 검증",
   doi_mismatch: "제목 불일치",
   invalid_doi: "링크 오류",
   doi_suggested: "DOI 후보",
   not_found: "메타데이터 없음",
   skipped: "검증 보류",
+};
+
+const ISSUE_TYPE_LABELS: Record<string, string> = {
+  orphan_citation: "미수록 인용",
+  orphan_reference: "미인용 문헌",
+  year_mismatch: "연도 불일치",
+  author_count_mismatch: "et al. 규칙",
+  duplicate_reference: "중복 문헌",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  crossref: "Crossref",
+  "doi.org": "doi.org",
+  openalex: "OpenAlex",
+  kci: "KCI",
 };
 
 export default function Home() {
@@ -341,7 +357,10 @@ function IssuePanel({ result }: { result: JobResult }) {
         {result.match_report.issues.map((issue, i) => (
           <li key={`${issue.type}-${i}`} className="rounded-md border border-[#2BA8A2]/15 border-l-4 border-l-[#EF6C4A] bg-white p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <SeverityBadge severity={issue.severity} label={issue.type} />
+              <SeverityBadge
+                severity={issue.severity}
+                label={ISSUE_TYPE_LABELS[issue.type] ?? issue.type}
+              />
               {issue.paragraph_index !== null && issue.paragraph_index !== undefined && (
                 <span className="text-xs font-medium text-[#5E7E7A]">문단 {issue.paragraph_index + 1}</span>
               )}
@@ -371,7 +390,9 @@ function doiStatusLabel(status: string): string {
 
 function DoiPanel({ items }: { items: VerifiedItem[] }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const verifiedCount = items.filter((item) => item.status === "verified").length;
+  const verifiedCount = items.filter(
+    (item) => item.status === "verified" || item.status === "verified_external",
+  ).length;
   const errorCount = items.filter(
     (item) => item.severity === "CRITICAL" || item.status === "invalid_doi",
   ).length;
@@ -448,8 +469,10 @@ function DoiRow({
   item: VerifiedItem;
   onToggle: () => void;
 }) {
-  const showNote = item.status !== "verified" && item.note;
+  const showNote =
+    item.status !== "verified" && item.status !== "verified_external" && item.note;
   const displayUrl = item.doi_url ? compactDoiUrl(item.doi_url) : "";
+  const sourceLabel = item.source ? SOURCE_LABELS[item.source] : undefined;
 
   return (
     <article className="rounded-md border border-[#2BA8A2]/15 border-l-4 border-l-[#5DADE2] bg-white p-3">
@@ -460,6 +483,11 @@ function DoiRow({
             <SeverityBadge severity={item.severity} label={doiStatusLabel(item.status)} />
             <StatusPill ok={item.doi_resolves} label="링크" />
             <StatusPill ok={item.title_matches} label="제목" />
+            {sourceLabel && (
+              <span className="rounded-full border border-[#2BA8A2]/25 bg-[#E8F6F5] px-2 py-0.5 text-[10px] font-bold text-[#1E8C86]">
+                {sourceLabel}
+              </span>
+            )}
           </div>
           <div className="mt-2 flex min-w-0 items-center gap-2 text-xs font-medium text-[#5E7E7A]">
             {item.doi_url ? (

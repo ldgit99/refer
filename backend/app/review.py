@@ -15,10 +15,13 @@ from app.citation.formatter import format_apa
 from app.citation.matcher import MatchReport, match
 from app.citation.ref_to_csl import reference_to_csl
 from app.citation.references import ReferenceItem, parse_references
+from app.config import get_settings
 from app.llm.reference_parser import refine_references_with_llm
 from app.parsers.base import ParsedDocument
 from app.verifier.crossref import CrossrefClient
-from app.verifier.verify import VerifiedItem, verify_reference
+from app.verifier.kci import KciClient
+from app.verifier.openalex import OpenAlexClient
+from app.verifier.verify import VerifiedItem, verify_references
 from app.writers.base import ParagraphRef, Patch
 
 MAX_VERIFICATION_ERROR_LEN = 180
@@ -112,7 +115,12 @@ def build_patches(
     for i, issue in enumerate(report.issues):
         if issue.paragraph_index is None:
             continue
-        if issue.type in {"orphan_citation", "year_mismatch", "author_count_mismatch"}:
+        if issue.type in {
+            "orphan_citation",
+            "year_mismatch",
+            "author_count_mismatch",
+            "duplicate_reference",
+        }:
             patches.append(
                 Patch(
                     id=f"f1-{i}",
@@ -188,12 +196,11 @@ async def review_with_verification(
     client: CrossrefClient | None = None,
 ) -> ReviewResult:
     """Full F1 + F2 + F3 review. Skips F3 gracefully when disabled or offline."""
-    from app.config import get_settings
-
+    settings = get_settings()
     report, csl_items, formatted, llm_used = await _f1_f2_with_optional_llm(document)
     verified: dict[str, VerifiedItem] = {}
 
-    if client is None and not get_settings().f3_enabled:
+    if client is None and not settings.f3_enabled:
         patches = build_patches(document, report, formatted, csl_items, verified)
         return ReviewResult(
             match_report=report,
@@ -209,13 +216,23 @@ async def review_with_verification(
         cr = client or CrossrefClient()
         if own_client:
             await cr.__aenter__()
+        openalex_cm = (
+            OpenAlexClient() if (own_client and settings.openalex_enabled) else None
+        )
+        kci_cm = KciClient() if own_client else None
         try:
-            for c in csl_items:
-                try:
-                    verified[c.id] = await verify_reference(c, cr)
-                except Exception as exc:  # noqa: BLE001 - per-item resilience
-                    verified[c.id] = _verification_failure_item(c, exc)
+            if openalex_cm is not None:
+                await openalex_cm.__aenter__()
+            if kci_cm is not None:
+                await kci_cm.__aenter__()
+            verified = await verify_references(
+                csl_items, cr, openalex=openalex_cm, kci=kci_cm
+            )
         finally:
+            if openalex_cm is not None:
+                await openalex_cm.__aexit__(None, None, None)
+            if kci_cm is not None:
+                await kci_cm.__aexit__(None, None, None)
             if own_client:
                 await cr.__aexit__(None, None, None)
     except Exception as exc:  # noqa: BLE001 - F3 is best-effort
