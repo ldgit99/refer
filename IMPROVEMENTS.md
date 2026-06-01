@@ -1,6 +1,6 @@
 # 기능별 개선 사항 (2026-06-01)
 
-`feat/improvements` 브랜치에서 적용한 기능별 개선 내역. 백엔드 **ruff clean + 98 tests pass**.
+`feat/improvements` 브랜치에서 적용한 기능별 개선 내역. 백엔드 **ruff clean + 99 tests pass**, 프론트 tsc clean.
 
 ## F3 — DOI·실재 검증
 
@@ -11,6 +11,7 @@
 | **OpenAlex 보조 검증** | Crossref 미스 시 OpenAlex 제목 검색으로 보강(한국어 제목 강점). `CSLItem.from_openalex` 추가. | `verifier/openalex.py:search_title`, `verify.py` |
 | **KCI fallback** | `KCI_API_KEY` 설정 시 KCI Open API로 국내 논문 확인 → `verified_external`. 키 없으면 no-op. | `verifier/kci.py` |
 | **검증 출처 노출** | `VerifiedItem.source`(crossref/doi.org/openalex/kci) 추가, UI 배지로 표시. | `verify.py`, `frontend` |
+| **★ 링크 실패 오탐 제거** | Crossref-first 판정 + 단계화 임계값(verified/verified_weak/mismatch). 살아있는 DOI가 "링크 실패/0%"로 뜨던 핵심 버그 수정. 상세는 아래 별도 절. | `verify.py`, `config.py`, `agents/critics.py` |
 
 ## F1 — 인용↔레퍼런스 정합성
 
