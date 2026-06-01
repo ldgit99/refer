@@ -389,6 +389,7 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
   const verifiedCount = items.filter((item) =>
     VERIFIED_STATUSES.has(item.status),
   ).length;
+  const noDoiCount = items.filter((item) => item.status === "no_doi").length;
   const errorCount = items.filter((item) => item.status === "invalid_doi").length;
   const warningCount = items.filter((item) => item.status === "skipped").length;
   // Only links with a warning/error need attention — verified and no-DOI rows
@@ -412,8 +413,9 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
   return (
     <section className="rounded-md border border-[#2BA8A2]/20 bg-white p-4 shadow-[0_4px_20px_rgba(43,168,162,0.10)]">
       <PanelTitle title="DOI 검증" count={items.length} />
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <DoiStat label="링크 열림" value={verifiedCount} tone="ok" />
+        <DoiStat label="링크 없음" value={noDoiCount} tone="neutral" />
         <DoiStat label="검증 보류" value={warningCount} tone="warning" />
         <DoiStat label="링크 오류" value={errorCount} tone="error" />
       </div>
@@ -430,7 +432,9 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
           <p className="rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-3 text-sm font-medium text-[#1E8C86]">
             {items.length === 0
               ? "검토할 DOI가 없습니다."
-              : "경고·오류가 있는 DOI가 없습니다. ✅"}
+              : noDoiCount > 0
+                ? `링크 오류는 없고, DOI 링크가 없는 참고문헌이 ${noDoiCount}개 있습니다.`
+                : "경고·오류가 있는 DOI가 없습니다. ✅"}
           </p>
         )}
       </div>
@@ -444,7 +448,7 @@ function DoiStat({
   value,
 }: {
   label: string;
-  tone: "ok" | "warning" | "error";
+  tone: "ok" | "warning" | "error" | "neutral";
   value: number;
 }) {
   const toneClass =
@@ -452,7 +456,9 @@ function DoiStat({
       ? "border-[#2BA8A2]/20 bg-[#E8F6F5] text-[#1E8C86]"
       : tone === "warning"
         ? "border-[#FFD23F]/45 bg-[#FFF8E7] text-[#8A6A00]"
-        : "border-[#EF6C4A]/30 bg-[#FFF0EC] text-[#B84428]";
+        : tone === "error"
+          ? "border-[#EF6C4A]/30 bg-[#FFF0EC] text-[#B84428]"
+          : "border-[#5DADE2]/30 bg-[#EAF5FC] text-[#1F6F9F]";
   return (
     <div className={`rounded-md border px-2.5 py-2 ${toneClass}`}>
       <div className="text-[11px] font-bold">{label}</div>
