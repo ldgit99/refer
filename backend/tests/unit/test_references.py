@@ -120,3 +120,24 @@ def test_long_korean_body_paragraph_is_not_merged_into_reference() -> None:
 
     assert len(refs) == 2
     assert all("\ubcf8 \uc5f0\uad6c\ub294 \ub2e4\uc74c" not in ref.raw for ref in refs)
+
+
+def test_numbered_discussion_section_is_not_a_reference() -> None:
+    refs = parse_references(
+        "\n".join(
+            [
+                (
+                    "5. Discussion and Conclusion 5.1 Discussion This study examined "
+                    "the effects of AI chatbot-integrated instruction with embedded "
+                    "scaffolding on high school students' science-positive experiences "
+                    "and attitudes toward artificial intelligence in the Earth science "
+                    "unit on stellar types and evolution."
+                ),
+                "Bora, B. Y., & Kolemen, C. S. (2025). Integrating AI into instruction. Journal, 1(1), 1-9.",
+                "Chang, J., Park, J., & Park, J. (2023). Using an artificial tutor. Journal, 2(1), 10-19.",
+            ]
+        )
+    )
+
+    assert len(refs) == 2
+    assert all("Discussion and Conclusion" not in ref.raw for ref in refs)

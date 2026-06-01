@@ -57,8 +57,10 @@ def _starts_reference_entry(text: str) -> bool:
     stripped = text.strip()
     if len(stripped) < 12:
         return False
-    if _NUMBERED_PREFIX_RE.match(stripped):
-        return True
+    number_match = _NUMBERED_PREFIX_RE.match(stripped)
+    if number_match:
+        body = _NUMBERED_PREFIX_RE.sub("", stripped, count=1)
+        return _numbered_body_looks_like_reference(body)
 
     year = _YEAR_RE.search(stripped)
     if not year:
@@ -76,12 +78,32 @@ def _starts_reference_entry(text: str) -> bool:
     return bool(_KOREAN_FAMILY_RE.search(head))
 
 
+def _numbered_body_looks_like_reference(text: str) -> bool:
+    body = text.strip()
+    if len(body) < 8:
+        return False
+    if _DOI_RE.search(body):
+        return True
+    year = _YEAR_RE.search(body)
+    if not year:
+        return False
+    return bool(
+        _LATIN_FAMILY_RE.search(body[: year.start() + 1])
+        or _ORG_YEAR_RE.match(body)
+        or _KOREAN_FAMILY_RE.search(body[: year.start()])
+    )
+
+
 def _looks_like_reference_entry(text: str) -> bool:
     """Filter out section headings/body fragments inside a detected ref block."""
     stripped = text.strip()
     if len(stripped) < 12:
         return False
-    if _NUMBERED_PREFIX_RE.match(stripped) or _DOI_RE.search(stripped):
+    number_match = _NUMBERED_PREFIX_RE.match(stripped)
+    if number_match:
+        body = _NUMBERED_PREFIX_RE.sub("", stripped, count=1)
+        return _numbered_body_looks_like_reference(body)
+    if _DOI_RE.search(stripped):
         return True
     if not _YEAR_RE.search(stripped):
         return False
@@ -123,8 +145,18 @@ def _split_entries(section: str) -> list[str]:
     if not lines:
         return []
 
-    numbered = sum(1 for ln in lines if _NUMBERED_PREFIX_RE.match(ln))
-    if numbered >= 2 or _NUMBERED_PREFIX_RE.match(lines[0]):
+    numbered_refs = 0
+    for ln in lines:
+        if _NUMBERED_PREFIX_RE.match(ln):
+            body = _NUMBERED_PREFIX_RE.sub("", ln.strip(), count=1)
+            if _numbered_body_looks_like_reference(body):
+                numbered_refs += 1
+    first_numbered = _NUMBERED_PREFIX_RE.match(lines[0])
+    first_numbered_ref = False
+    if first_numbered:
+        first_body = _NUMBERED_PREFIX_RE.sub("", lines[0].strip(), count=1)
+        first_numbered_ref = _numbered_body_looks_like_reference(first_body)
+    if numbered_refs >= 2 or first_numbered_ref:
         # Merge wrapped continuation lines into their numbered entry.
         entries: list[str] = []
         for ln in lines:
