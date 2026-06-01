@@ -100,6 +100,17 @@ def _looks_like_section_fragment(text: str) -> bool:
     return bool(re.match(r"^[\uac00-\ud7a3A-Za-z0-9]{1,4}[.)]\s+\S+", stripped))
 
 
+def _looks_like_body_prose(text: str) -> bool:
+    stripped = text.strip()
+    if _DOI_RE.search(stripped):
+        return False
+    korean_chars = len(re.findall(r"[\uac00-\ud7a3]", stripped))
+    if korean_chars < 20 or len(stripped) < 80:
+        return False
+    sentence_endings = len(re.findall(r"(?:다|요|음|함|됨|임)\.", stripped))
+    return sentence_endings >= 2
+
+
 def _split_entries(section: str) -> list[str]:
     """Split a reference block into individual entries.
 
@@ -133,7 +144,11 @@ def _split_entries(section: str) -> list[str]:
             if current:
                 entries.append(current)
             current = stripped
-        elif current and not _looks_like_section_fragment(stripped):
+        elif (
+            current
+            and not _looks_like_section_fragment(stripped)
+            and not _looks_like_body_prose(stripped)
+        ):
             current += " " + stripped
     if current:
         entries.append(current)
