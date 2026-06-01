@@ -33,3 +33,18 @@ def test_korean_entry() -> None:
 def test_empty_section() -> None:
     assert parse_references(None) == []
     assert parse_references("") == []
+
+
+def test_body_section_heading_inside_reference_block_is_ignored() -> None:
+    refs = parse_references(
+        "\n".join(
+            [
+                "Kim, S. (2024). A real study. Journal, 1(1), 1-2.",
+                "다. 한계점",
+                "Lee, J. (2023). Another study. Journal, 2(1), 3-4.",
+            ]
+        )
+    )
+
+    assert len(refs) == 2
+    assert all("한계점" not in ref.raw for ref in refs)

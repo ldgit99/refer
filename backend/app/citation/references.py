@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 _NUMBERED_PREFIX_RE = re.compile(r"^\s*\[?(\d+)\]?[.)]?\s+")
 _YEAR_RE = re.compile(r"\(?((?:19|20)\d{2})([a-z])?\)?")
+_DOI_RE = re.compile(r"10\.\d{4,9}/", re.IGNORECASE)
 # "Kim, S.", "Lee, J.-H.", "van Dijk, T." style family names.
 _LATIN_FAMILY_RE = re.compile(r"\b([A-Z][a-zA-Z'’\-]+),\s*(?:[A-Z]\.?\s*)+")
 # Korean author tokens at the start of an entry.
@@ -44,6 +45,21 @@ def _extract_authors(text: str) -> list[str]:
     return korean
 
 
+def _looks_like_reference_entry(text: str) -> bool:
+    """Filter out section headings/body fragments inside a detected ref block."""
+    stripped = text.strip()
+    if len(stripped) < 12:
+        return False
+    if _NUMBERED_PREFIX_RE.match(stripped) or _DOI_RE.search(stripped):
+        return True
+    if not _YEAR_RE.search(stripped):
+        return False
+    if _LATIN_FAMILY_RE.search(stripped):
+        return True
+    head = stripped.split("(", 1)[0]
+    return bool(_KOREAN_FAMILY_RE.search(head))
+
+
 def _split_entries(section: str) -> list[str]:
     """Split a reference block into individual entries.
 
@@ -74,7 +90,8 @@ def parse_references(section: str | None) -> list[ReferenceItem]:
     if not section:
         return []
     items: list[ReferenceItem] = []
-    for idx, raw in enumerate(_split_entries(section)):
+    entries = [raw for raw in _split_entries(section) if _looks_like_reference_entry(raw)]
+    for idx, raw in enumerate(entries):
         number_match = _NUMBERED_PREFIX_RE.match(raw)
         number = int(number_match.group(1)) if number_match else None
         body = _NUMBERED_PREFIX_RE.sub("", raw) if number_match else raw
