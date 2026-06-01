@@ -506,7 +506,7 @@ function DoiStat({
 }: {
   label: string;
   tone: "ok" | "warning" | "error" | "neutral";
-  value: number;
+  value: number | string;
 }) {
   const toneClass =
     tone === "ok"
@@ -639,7 +639,11 @@ function DiagnosticsPanel({
           value={diagnostics.parsed_reference_count}
           tone="ok"
         />
-        <DoiStat label="본문 인용" value={diagnostics.citation_count} tone="ok" />
+        <DoiStat
+          label="인용 스타일"
+          value={styleLabel(diagnostics.citation_system)}
+          tone={diagnostics.citation_system === "mixed" ? "warning" : "ok"}
+        />
       </div>
 
       {diagnostics.warnings.length > 0 && (
@@ -660,6 +664,10 @@ function DiagnosticsPanel({
           <div className="grid gap-1">
             <div>파서 버전: {diagnostics.parser_version}</div>
             <div>
+              인용 스타일: {styleLabel(diagnostics.citation_system)} (
+              {Math.round(diagnostics.citation_system_confidence * 100)}%)
+            </div>
+            <div>
               참고문헌 시작 문단:{" "}
               {diagnostics.references_start_index === null ||
               diagnostics.references_start_index === undefined
@@ -668,6 +676,16 @@ function DiagnosticsPanel({
             </div>
             <div>참고문헌 후보 길이: {diagnostics.references_section_chars}자</div>
           </div>
+          {diagnostics.style_evidence.length > 0 && (
+            <div>
+              <div className="font-extrabold text-[#1E8C86]">스타일 판단 근거</div>
+              <ul className="mt-1 space-y-1">
+                {diagnostics.style_evidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {diagnostics.reference_samples.length > 0 && (
             <div>
               <div className="font-extrabold text-[#1E8C86]">참고문헌 샘플</div>
@@ -684,6 +702,13 @@ function DiagnosticsPanel({
       )}
     </section>
   );
+}
+
+function styleLabel(system: string): string {
+  if (system === "apa") return "APA";
+  if (system === "ieee") return "IEEE";
+  if (system === "mixed") return "혼합";
+  return "미확인";
 }
 
 function PatchWorkspace({

@@ -16,6 +16,7 @@ from rapidfuzz import fuzz
 
 from app.citation.extractor import InTextCitation
 from app.citation.references import ReferenceItem
+from app.citation.style import CitationStyleProfile
 from app.config import get_settings
 
 IssueType = Literal[
@@ -45,6 +46,7 @@ class MatchReport(BaseModel):
     references: list[ReferenceItem] = Field(default_factory=list)
     issues: list[MatchIssue] = Field(default_factory=list)
     stats: dict[str, int] = Field(default_factory=dict)
+    style_profile: CitationStyleProfile | None = None
 
 
 def _norm(name: str) -> str:
@@ -88,6 +90,7 @@ def _has_et_al(raw: str) -> bool:
 def match(
     citations: list[InTextCitation],
     references: list[ReferenceItem],
+    style_profile: CitationStyleProfile | None = None,
 ) -> MatchReport:
     settings = get_settings()
     threshold = settings.fuzzy_match_threshold
@@ -287,4 +290,5 @@ def match(
         references=references,
         issues=issues,
         stats=stats,
+        style_profile=style_profile,
     )

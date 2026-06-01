@@ -18,6 +18,7 @@ from app.citation.extractor import extract_citations
 from app.citation.matcher import MatchReport, match
 from app.citation.ref_to_csl import reference_to_csl
 from app.citation.references import ReferenceItem, parse_references
+from app.citation.style import CitationStyleProfile, detect_citation_style
 from app.config import get_settings
 from app.llm.reference_parser import refine_references_with_llm
 from app.parsers.base import ParsedDocument
@@ -37,6 +38,11 @@ class ReviewDiagnostics(BaseModel):
     references_section_chars: int = 0
     parsed_reference_count: int = 0
     citation_count: int = 0
+    citation_system: str = "unknown"
+    citation_system_confidence: float = 0.0
+    citation_style_counts: dict[str, int] = Field(default_factory=dict)
+    reference_style_counts: dict[str, int] = Field(default_factory=dict)
+    style_evidence: list[str] = Field(default_factory=list)
     issue_summary: dict[str, int] = Field(default_factory=dict)
     doi_summary: dict[str, int] = Field(default_factory=dict)
     reference_samples: list[str] = Field(default_factory=list)
@@ -133,6 +139,7 @@ def build_diagnostics(
     document: ParsedDocument,
     report: MatchReport,
     verified: dict[str, VerifiedItem],
+    style_profile: CitationStyleProfile | None = None,
 ) -> ReviewDiagnostics:
     issue_summary: dict[str, int] = {}
     for issue in report.issues:
@@ -143,6 +150,10 @@ def build_diagnostics(
         doi_summary[item.status] = doi_summary.get(item.status, 0) + 1
 
     warnings: list[str] = []
+    if style_profile and style_profile.system == "mixed":
+        warnings.append("본문 인용과 참고문헌 목록에 여러 인용 스타일이 섞여 있습니다.")
+    elif style_profile and style_profile.system == "unknown":
+        warnings.append("문서 전체의 인용 스타일을 안정적으로 판별하지 못했습니다.")
     if document.references_section is None:
         warnings.append("참고문헌 섹션을 찾지 못했습니다.")
     elif not report.references:
@@ -162,6 +173,15 @@ def build_diagnostics(
         references_section_chars=len(document.references_section or ""),
         parsed_reference_count=len(report.references),
         citation_count=len(report.citations),
+        citation_system=style_profile.system if style_profile else "unknown",
+        citation_system_confidence=style_profile.confidence if style_profile else 0.0,
+        citation_style_counts=style_profile.citation_style_counts
+        if style_profile
+        else {},
+        reference_style_counts=style_profile.reference_style_counts
+        if style_profile
+        else {},
+        style_evidence=style_profile.evidence if style_profile else [],
         issue_summary=issue_summary,
         doi_summary=doi_summary,
         reference_samples=[ref.raw[:220] for ref in report.references[:5]],
@@ -172,7 +192,8 @@ def build_diagnostics(
 def _f1(document: ParsedDocument) -> tuple[MatchReport, list[CSLItem]]:
     citations = extract_citations(document)
     references = parse_references(document.references_section)
-    report = match(citations, references)
+    style_profile = detect_citation_style(citations, references)
+    report = match(citations, references, style_profile=style_profile)
     csl_items = [reference_to_csl(r) for r in references]
     return report, csl_items
 
@@ -183,7 +204,8 @@ async def _f1_with_optional_llm(
     citations = extract_citations(document)
     references = parse_references(document.references_section)
     references, csl_items, llm_used = await refine_references_with_llm(references)
-    report = match(citations, references)
+    style_profile = detect_citation_style(citations, references)
+    report = match(citations, references, style_profile=style_profile)
     return report, csl_items, llm_used
 
 
@@ -207,7 +229,9 @@ def review_sync(document: ParsedDocument) -> ReviewResult:
     """F1 only (no network)."""
     report, csl_items = _f1(document)
     patches = build_patches(document, report, csl_items, verified={})
-    diagnostics = build_diagnostics(document, report, verified={})
+    diagnostics = build_diagnostics(
+        document, report, verified={}, style_profile=report.style_profile
+    )
     return ReviewResult(
         match_report=report,
         csl_items=csl_items,
@@ -229,7 +253,9 @@ async def review_with_verification(
 
     if client is None and not settings.f3_enabled:
         patches = build_patches(document, report, csl_items, verified)
-        diagnostics = build_diagnostics(document, report, verified)
+        diagnostics = build_diagnostics(
+            document, report, verified, style_profile=report.style_profile
+        )
         return ReviewResult(
             match_report=report,
             csl_items=csl_items,
@@ -253,7 +279,9 @@ async def review_with_verification(
         verified = {c.id: _verification_failure_item(c, exc) for c in csl_items}
 
     patches = build_patches(document, report, csl_items, verified)
-    diagnostics = build_diagnostics(document, report, verified)
+    diagnostics = build_diagnostics(
+        document, report, verified, style_profile=report.style_profile
+    )
     return ReviewResult(
         match_report=report,
         csl_items=csl_items,

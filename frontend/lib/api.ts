@@ -21,6 +21,13 @@ export interface MatchReport {
   references: unknown[];
   issues: MatchIssue[];
   stats: Record<string, number>;
+  style_profile?: {
+    system: "apa" | "ieee" | "mixed" | "unknown";
+    confidence: number;
+    citation_style_counts: Record<string, number>;
+    reference_style_counts: Record<string, number>;
+    evidence: string[];
+  } | null;
 }
 
 export interface Patch {
@@ -61,6 +68,11 @@ export interface ReviewDiagnostics {
   references_section_chars: number;
   parsed_reference_count: number;
   citation_count: number;
+  citation_system: string;
+  citation_system_confidence: number;
+  citation_style_counts: Record<string, number>;
+  reference_style_counts: Record<string, number>;
+  style_evidence: string[];
   issue_summary: Record<string, number>;
   doi_summary: Record<string, number>;
   reference_samples: string[];
