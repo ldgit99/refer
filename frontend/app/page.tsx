@@ -389,10 +389,13 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
   const verifiedCount = items.filter((item) =>
     VERIFIED_STATUSES.has(item.status),
   ).length;
-  const errorCount = items.filter(
-    (item) => item.severity === "CRITICAL" || item.status === "invalid_doi",
-  ).length;
-  const warningCount = Math.max(items.length - verifiedCount - errorCount, 0);
+  const errorCount = items.filter((item) => item.status === "invalid_doi").length;
+  const warningCount = items.filter((item) => item.status === "skipped").length;
+  // Only links with a warning/error need attention — verified and no-DOI rows
+  // are summarised in the counts above and hidden to keep the list short.
+  const problemItems = items.filter(
+    (item) => item.status === "invalid_doi" || item.status === "skipped",
+  );
 
   function toggleExpanded(id: string) {
     setExpandedIds((current) => {
@@ -410,12 +413,12 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
     <section className="rounded-md border border-[#2BA8A2]/20 bg-white p-4 shadow-[0_4px_20px_rgba(43,168,162,0.10)]">
       <PanelTitle title="DOI 검증" count={items.length} />
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <DoiStat label="검증됨" value={verifiedCount} tone="ok" />
-        <DoiStat label="경고" value={warningCount} tone="warning" />
-        <DoiStat label="오류" value={errorCount} tone="error" />
+        <DoiStat label="링크 열림" value={verifiedCount} tone="ok" />
+        <DoiStat label="검증 보류" value={warningCount} tone="warning" />
+        <DoiStat label="링크 오류" value={errorCount} tone="error" />
       </div>
       <div className="mt-3 space-y-2">
-        {items.map((item) => (
+        {problemItems.map((item) => (
           <DoiRow
             key={item.ref_id}
             expanded={expandedIds.has(item.ref_id)}
@@ -423,9 +426,11 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
             onToggle={() => toggleExpanded(item.ref_id)}
           />
         ))}
-        {items.length === 0 && (
-          <p className="rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-3 text-sm text-[#34605C]">
-            DOI 메타데이터가 반환되지 않았습니다.
+        {problemItems.length === 0 && (
+          <p className="rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-3 text-sm font-medium text-[#1E8C86]">
+            {items.length === 0
+              ? "검토할 DOI가 없습니다."
+              : "경고·오류가 있는 DOI가 없습니다. ✅"}
           </p>
         )}
       </div>

@@ -1,11 +1,40 @@
 import pytest
 
 from app.citation.csl import CSLItem
-from app.citation.matcher import MatchReport
-from app.citation.references import ReferenceItem
+from app.citation.extractor import extract_from_text
+from app.citation.matcher import MatchReport, match
+from app.citation.references import ReferenceItem, parse_references
 from app.parsers.base import build_document
 from app.review import build_patches, review_with_verification
 from app.verifier.verify import VerifiedItem
+
+
+def test_every_f1_issue_becomes_a_suggestion() -> None:
+    # orphan_citation (body) + orphan_reference + duplicate_reference (list-level)
+    # must all yield a suggestion, not just the body-anchored one.
+    document = build_document(
+        [
+            "본 연구는 (Ghost, 2099)를 인용한다.",
+            "참고문헌",
+            "Kim, S. (2023). Cited work. Journal, 1(1), 1-2.",
+            "Kim, S. (2023). Cited work. Journal, 1(1), 1-2.",
+            "Lee, J. (2008). Never cited. Journal, 2(2), 3-4.",
+        ]
+    )
+    citations = []
+    for para in document.body_paragraphs():
+        citations.extend(extract_from_text(para.text, para.index))
+    references = parse_references(document.references_section)
+    report = match(citations, references)
+
+    issue_types = {i.type for i in report.issues}
+    assert {"orphan_citation", "orphan_reference", "duplicate_reference"} <= issue_types
+
+    patches = build_patches(document, report, csl_items=[], verified={})
+    f1_types = {p.comment.split("]")[0].replace("[F1 ", "") for p in patches if p.source == "F1"}
+    # Every F1 issue type is represented in the suggestions.
+    assert {"orphan_citation", "orphan_reference", "duplicate_reference"} <= f1_types
+    assert len([p for p in patches if p.source == "F1"]) == len(report.issues)
 
 
 class FailingCrossrefClient:

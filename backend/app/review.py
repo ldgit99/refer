@@ -59,33 +59,38 @@ def build_patches(
     F3: a citation_comment on each reference whose DOI link does not open.
     """
     patches: list[Patch] = []
+    refs_by_index = {ref.index: ref for ref in report.references}
 
-    # F1: matching problems anchored in the body text.
+    # F1: every matching problem becomes a suggestion. Body-level issues
+    # (orphan citation / year / et al.) anchor to the in-text location; list-level
+    # issues (uncited / duplicate reference) anchor to the reference paragraph.
     for i, issue in enumerate(report.issues):
-        if issue.paragraph_index is None:
-            continue
-        if issue.type in {
-            "orphan_citation",
-            "year_mismatch",
-            "author_count_mismatch",
-            "duplicate_reference",
-        }:
-            patches.append(
-                Patch(
-                    id=f"f1-{i}",
-                    kind="citation_comment",
-                    target=ParagraphRef(
-                        paragraph_index=issue.paragraph_index,
-                        char_start=issue.char_start,
-                        char_end=issue.char_end,
-                    ),
-                    before=issue.citation_raw or "",
-                    comment=f"[F1 {issue.type}] {issue.message}",
-                    confidence=0.95 if issue.severity == "CRITICAL" else 0.8,
-                    source="F1",
-                    severity=issue.severity,
-                )
+        if issue.paragraph_index is not None:
+            target = ParagraphRef(
+                paragraph_index=issue.paragraph_index,
+                char_start=issue.char_start,
+                char_end=issue.char_end,
             )
+            before = issue.citation_raw or ""
+        elif issue.reference_index is not None and issue.reference_index in refs_by_index:
+            ref = refs_by_index[issue.reference_index]
+            target = ParagraphRef(paragraph_index=_ref_paragraph_index(document, ref))
+            before = issue.reference_raw or ref.raw
+        else:
+            continue
+
+        patches.append(
+            Patch(
+                id=f"f1-{i}",
+                kind="citation_comment",
+                target=target,
+                before=before,
+                comment=f"[F1 {issue.type}] {issue.message}",
+                confidence=0.95 if issue.severity == "CRITICAL" else 0.8,
+                source="F1",
+                severity=issue.severity,
+            )
+        )
 
     # F3: flag references whose DOI link does not open.
     for ref in report.references:
