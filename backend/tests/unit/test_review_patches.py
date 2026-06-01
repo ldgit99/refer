@@ -71,5 +71,5 @@ async def test_doi_verification_failure_is_reported() -> None:
     verified = result.verified["ref-0"]
     assert verified.status == "skipped"
     assert verified.doi_url == "https://doi.org/10.1000/found"
-    assert "doi.org unavailable" in verified.note
+    assert "inconclusive" in verified.note
     assert any(p.source == "F3" and "skipped" in p.comment for p in result.patches)

@@ -44,6 +44,7 @@ const MODE_LABELS: Record<OutputMode, string> = {
 
 const DOI_STATUS_LABELS: Record<string, string> = {
   verified: "검증됨",
+  verified_weak: "검증(약)",
   verified_external: "외부 검증",
   doi_mismatch: "제목 불일치",
   invalid_doi: "링크 오류",
@@ -51,6 +52,13 @@ const DOI_STATUS_LABELS: Record<string, string> = {
   not_found: "메타데이터 없음",
   skipped: "검증 보류",
 };
+
+// Statuses that count as a successful verification (not a problem).
+const VERIFIED_STATUSES = new Set([
+  "verified",
+  "verified_weak",
+  "verified_external",
+]);
 
 const ISSUE_TYPE_LABELS: Record<string, string> = {
   orphan_citation: "미수록 인용",
@@ -390,8 +398,8 @@ function doiStatusLabel(status: string): string {
 
 function DoiPanel({ items }: { items: VerifiedItem[] }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const verifiedCount = items.filter(
-    (item) => item.status === "verified" || item.status === "verified_external",
+  const verifiedCount = items.filter((item) =>
+    VERIFIED_STATUSES.has(item.status),
   ).length;
   const errorCount = items.filter(
     (item) => item.severity === "CRITICAL" || item.status === "invalid_doi",
@@ -469,8 +477,7 @@ function DoiRow({
   item: VerifiedItem;
   onToggle: () => void;
 }) {
-  const showNote =
-    item.status !== "verified" && item.status !== "verified_external" && item.note;
+  const showNote = !VERIFIED_STATUSES.has(item.status) && item.note;
   const displayUrl = item.doi_url ? compactDoiUrl(item.doi_url) : "";
   const sourceLabel = item.source ? SOURCE_LABELS[item.source] : undefined;
 

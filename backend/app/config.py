@@ -52,7 +52,13 @@ class Settings(BaseSettings):
 
     # --- tunable thresholds (plan.md M6 §3) ---
     fuzzy_match_threshold: float = 0.85
-    doi_title_confidence: float = 0.92
+    # Title similarity at/above this -> "verified". Lowered from 0.92 because
+    # subtitle/translation/abbreviation differences routinely sit in the 0.80s
+    # for real matches; the band below is "weak" rather than a hard mismatch.
+    doi_title_confidence: float = 0.85
+    # Title similarity in [doi_title_weak, doi_title_confidence) -> "verified_weak"
+    # (INFO, not a warning). Below this is a genuine title mismatch.
+    doi_title_weak: float = 0.6
     critic_revision_max: int = 3
     hitl_confidence_gate: float = 0.7
 

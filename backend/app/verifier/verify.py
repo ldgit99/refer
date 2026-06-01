@@ -28,6 +28,7 @@ from app.verifier.openalex import OpenAlexClient
 
 VerificationStatus = Literal[
     "verified",
+    "verified_weak",
     "verified_external",
     "doi_mismatch",
     "invalid_doi",
@@ -122,111 +123,165 @@ def compare_metadata(ref: CSLItem, meta: CSLItem) -> tuple[float, str]:
     return confidence, "; ".join(notes)
 
 
+def _classify_doi_match(
+    ref_id: str,
+    confidence: float,
+    matched_title: str | None,
+    doi_url: str,
+    doi_resolves: bool | None,
+    source: VerificationSource,
+    note: str,
+) -> VerifiedItem:
+    """Band a DOI-with-metadata result into verified / weak / mismatch.
+
+    The DOI is known to exist (a metadata record was returned), so this never
+    produces a CRITICAL ``invalid_doi`` — only how strongly the *title* matches.
+    """
+    settings = get_settings()
+    if confidence >= settings.doi_title_confidence:
+        return VerifiedItem(
+            ref_id=ref_id,
+            status="verified",
+            confidence=confidence,
+            doi_url=doi_url,
+            doi_resolves=doi_resolves,
+            title_matches=True,
+            matched_title=matched_title,
+            source=source,
+            severity="INFO",
+            note=note or "DOI exists and the title matches.",
+        )
+    if confidence >= settings.doi_title_weak:
+        return VerifiedItem(
+            ref_id=ref_id,
+            status="verified_weak",
+            confidence=confidence,
+            doi_url=doi_url,
+            doi_resolves=doi_resolves,
+            title_matches=True,
+            matched_title=matched_title,
+            source=source,
+            severity="INFO",
+            note=note
+            or "DOI exists; title is a probable (not exact) match — please confirm.",
+        )
+    return VerifiedItem(
+        ref_id=ref_id,
+        status="doi_mismatch",
+        confidence=confidence,
+        doi_url=doi_url,
+        doi_resolves=doi_resolves,
+        title_matches=False,
+        matched_title=matched_title,
+        source=source,
+        severity="WARNING",
+        note=note or "DOI exists, but its title does not match the reference.",
+    )
+
+
 async def _verify_existing_doi(
     ref: CSLItem,
     doi: str,
     client: CrossrefClient,
 ) -> VerifiedItem:
-    settings = get_settings()
+    """Verify a reference that already carries a DOI.
+
+    Strategy (Crossref-first): a record in Crossref OR doi.org content
+    negotiation proves the DOI is *registered*, so existence does not depend on
+    fetching the publisher landing page — which data-center IPs (e.g. serverless
+    hosts) are frequently bot-blocked from, causing false "link failed" results.
+    The browser-style resolve check is only **corroborating**: it can upgrade
+    ``doi_resolves`` to True but never downgrades an otherwise-valid DOI.
+    """
     doi = normalize_doi(doi) or doi
     doi_url = f"https://doi.org/{doi}"
 
-    doi_resolves = await client.doi_url_resolves(doi)
-    resolver_msg = await client.resolve_doi_csl(doi) if doi_resolves else None
-    if resolver_msg is None:
-        crossref_msg = await client.get_work(doi) if doi_resolves else None
+    # 1) Authoritative existence checks (metadata), tolerant of failures.
+    crossref_meta: CSLItem | None = None
+    resolver_meta: CSLItem | None = None
+    try:
+        crossref_msg = await client.get_work(doi)
         if crossref_msg is not None:
             crossref_meta = CSLItem.from_crossref(ref.id, crossref_msg)
-            confidence, note = compare_metadata(ref, crossref_meta)
-            title_matches = confidence >= settings.doi_title_confidence
-            if title_matches:
-                return VerifiedItem(
-                    ref_id=ref.id,
-                    status="verified",
-                    confidence=confidence,
-                    doi_url=doi_url,
-                    doi_resolves=True,
-                    title_matches=True,
-                    matched_title=crossref_meta.title,
-                    severity="INFO",
-                    note=note or "DOI URL resolves; verified with Crossref metadata.",
-                )
-            return VerifiedItem(
-                ref_id=ref.id,
-                status="doi_mismatch",
-                confidence=confidence,
-                doi_url=doi_url,
-                doi_resolves=True,
-                title_matches=False,
-                matched_title=crossref_meta.title,
-                severity="WARNING",
-                note=note
-                or "DOI URL resolves, but Crossref title metadata does not match the reference title.",
-            )
+    except Exception:  # noqa: BLE001 - tolerate transient Crossref errors
+        crossref_meta = None
+    try:
+        resolver_msg = await client.resolve_doi_csl(doi)
+        if resolver_msg is not None:
+            resolver_meta = CSLItem.from_csl_json(ref.id, resolver_msg)
+    except Exception:  # noqa: BLE001 - resolver is best-effort
+        resolver_meta = None
 
-        return VerifiedItem(
-            ref_id=ref.id,
-            status="not_found" if doi_resolves else "invalid_doi",
-            severity="WARNING" if doi_resolves else "CRITICAL",
-            doi_url=doi_url,
-            doi_resolves=doi_resolves,
-            title_matches=None if doi_resolves else False,
-            note=(
-                "DOI URL resolves, but usable DOI metadata was not found."
-                if doi_resolves
-                else f"DOI URL {doi_url} did not resolve."
-            ),
+    # 2) Corroborating browser-style resolve (never the sole basis for a verdict).
+    try:
+        url_ok: bool | None = await client.doi_url_resolves(doi)
+    except Exception:  # noqa: BLE001 - bot-blocking / transient failures are expected
+        url_ok = None
+
+    has_metadata = crossref_meta is not None or resolver_meta is not None
+    # The DOI is considered to resolve if any signal is positive.
+    doi_resolves = True if (has_metadata or url_ok) else (False if url_ok is False else None)
+
+    if has_metadata:
+        best_conf = -1.0
+        best_meta: CSLItem | None = None
+        best_source: VerificationSource = "crossref"
+        notes: list[str] = []
+        for meta, source in ((crossref_meta, "crossref"), (resolver_meta, "doi.org")):
+            if meta is None:
+                continue
+            conf, note = compare_metadata(ref, meta)
+            if note:
+                notes.append(note)
+            if conf > best_conf:
+                best_conf, best_meta, best_source = conf, meta, source  # type: ignore[assignment]
+        return _classify_doi_match(
+            ref.id,
+            best_conf,
+            best_meta.title if best_meta else None,
+            doi_url,
+            doi_resolves,
+            best_source,
+            "; ".join(dict.fromkeys(notes)),
         )
 
-    resolver_meta = CSLItem.from_csl_json(ref.id, resolver_msg)
-    resolver_confidence, resolver_note = compare_metadata(ref, resolver_meta)
-    resolver_title_matches = resolver_confidence >= settings.doi_title_confidence
-
-    crossref_msg = await client.get_work(doi)
-    if crossref_msg is None:
+    # 3) No metadata anywhere. Distinguish a registered-but-opaque DOI from a
+    #    genuinely invalid one using the resolve signal.
+    if url_ok:
         return VerifiedItem(
             ref_id=ref.id,
-            status="not_found",
-            confidence=resolver_confidence,
+            status="verified_weak",
+            confidence=0.0,
             doi_url=doi_url,
             doi_resolves=True,
-            title_matches=resolver_title_matches,
-            matched_title=resolver_meta.title,
-            severity="WARNING",
-            note="DOI URL resolves, but Crossref did not return a work record.",
-        )
-
-    crossref_meta = CSLItem.from_crossref(ref.id, crossref_msg)
-    crossref_confidence, crossref_note = compare_metadata(ref, crossref_meta)
-    crossref_title_matches = crossref_confidence >= settings.doi_title_confidence
-    confidence = max(resolver_confidence, crossref_confidence)
-    matched_title = resolver_meta.title or crossref_meta.title
-    note = "; ".join(n for n in (resolver_note, crossref_note) if n)
-
-    if resolver_title_matches and crossref_title_matches:
-        return VerifiedItem(
-            ref_id=ref.id,
-            status="verified",
-            confidence=confidence,
-            doi_url=doi_url,
-            doi_resolves=True,
-            title_matches=True,
-            matched_title=matched_title,
+            title_matches=None,
+            source="doi.org",
             severity="INFO",
-            note=note,
+            note="DOI link resolves, but no machine-readable metadata was returned.",
         )
-
+    if url_ok is False:
+        return VerifiedItem(
+            ref_id=ref.id,
+            status="invalid_doi",
+            confidence=0.0,
+            doi_url=doi_url,
+            doi_resolves=False,
+            title_matches=False,
+            source="none",
+            severity="CRITICAL",
+            note=f"DOI link {doi_url} did not resolve and no metadata was found.",
+        )
+    # All checks were inconclusive (network/bot-block): do not raise a false alarm.
     return VerifiedItem(
         ref_id=ref.id,
-        status="doi_mismatch",
-        confidence=confidence,
+        status="skipped",
+        confidence=0.0,
         doi_url=doi_url,
-        doi_resolves=True,
-        title_matches=False,
-        matched_title=matched_title,
+        doi_resolves=None,
+        title_matches=None,
+        source="none",
         severity="WARNING",
-        note=note
-        or "DOI URL resolves, but resolver/Crossref title metadata does not match the reference title.",
+        note="DOI verification was inconclusive (metadata services unreachable).",
     )
 
 
@@ -283,10 +338,7 @@ async def verify_reference(
     doi = normalize_doi(ref.doi) or extract_doi(ref.url) or extract_doi(ref.title)
 
     if doi:
-        item = await _verify_existing_doi(ref, doi, client)
-        if item.source == "none":
-            item.source = "doi.org" if item.doi_resolves else "crossref"
-        return item
+        return await _verify_existing_doi(ref, doi, client)
 
     if not ref.title:
         return VerifiedItem(

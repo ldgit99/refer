@@ -53,16 +53,27 @@ def apa_style_critic(formatted: dict[str, str]) -> CriticVerdict:
     )
 
 
+# Substrings in a VerifiedItem.note that indicate a genuine disagreement (as
+# opposed to a benign confirmation note like "DOI exists and the title matches").
+_DISAGREEMENT_MARKERS = ("mismatch", "불일치", "vs ")
+
+
+def _note_signals_disagreement(note: str) -> bool:
+    low = note.lower()
+    return any(marker.lower() in low for marker in _DISAGREEMENT_MARKERS)
+
+
 def evidence_critic(verified: dict[str, VerifiedItem]) -> CriticVerdict:
     """C3 — independent re-read of verification results (hallucination guard).
 
-    Downgrades any 'verified' that the verifier itself noted disagreements on,
-    and surfaces invalid DOIs as CRITICAL.
+    Downgrades a 'verified' item only when the verifier's own note flags an
+    author/year/title disagreement, and surfaces invalid DOIs as CRITICAL.
+    A benign confirmation note must not trigger a downgrade.
     """
     downgrades: list[str] = []
     critical = False
     for ref_id, v in verified.items():
-        if v.status == "verified" and v.note:
+        if v.status == "verified" and v.note and _note_signals_disagreement(v.note):
             downgrades.append(f"{ref_id}: '{v.note}' 근거로 WARNING 강등 권고")
         if v.status == "invalid_doi":
             critical = True

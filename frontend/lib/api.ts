@@ -85,8 +85,8 @@ export function reviewStats(job: JobResult) {
   const references = s.references ?? 0;
   const issues = s.issues ?? 0;
   const verifiedValues = Object.values(job.verified ?? {});
-  const verifiedOk = verifiedValues.filter(
-    (v) => v.status === "verified" || v.status === "verified_external",
+  const verifiedOk = verifiedValues.filter((v) =>
+    ["verified", "verified_weak", "verified_external"].includes(v.status),
   ).length;
   const matchRate =
     citations > 0

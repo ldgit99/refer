@@ -152,7 +152,9 @@ async def test_doi_mismatch_downgraded() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_doi_link_resolves_but_crossref_missing_is_not_found() -> None:
+async def test_doi_resolver_metadata_verifies_even_when_crossref_404s() -> None:
+    # doi.org content negotiation alone proves the DOI exists and matches, even
+    # if the Crossref /works lookup 404s (Crossref-first / resolver-corroborated).
     doi = "10.1000/resolver-only"
     _mock_doi_link(doi)
     _mock_doi_csl(doi, "A study of things", "Kim", 2024)
@@ -166,14 +168,18 @@ async def test_doi_link_resolves_but_crossref_missing_is_not_found() -> None:
     )
     async with CrossrefClient() as client:
         result = await verify_reference(ref, client)
-    assert result.status == "not_found"
+    assert result.status == "verified"
     assert result.doi_resolves is True
     assert result.title_matches is True
+    assert result.source == "doi.org"
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_doi_browser_link_resolves_without_csl_json_is_not_invalid() -> None:
+async def test_doi_browser_link_resolves_without_metadata_is_weak_not_alarm() -> None:
+    # Link resolves but no machine-readable metadata is returned anywhere: this
+    # is a registered DOI we simply cannot title-match, so it is a soft
+    # "verified_weak" (INFO), never a warning/not_found false alarm.
     doi = "10.1000/html-only"
     _mock_doi_link(doi)
     respx.get(f"https://doi.org/{doi}").mock(
@@ -187,10 +193,43 @@ async def test_doi_browser_link_resolves_without_csl_json_is_not_invalid() -> No
     async with CrossrefClient() as client:
         result = await verify_reference(ref, client)
 
-    assert result.status == "not_found"
-    assert result.severity == "WARNING"
+    assert result.status == "verified_weak"
+    assert result.severity == "INFO"
     assert result.doi_resolves is True
-    assert result.title_matches is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_botblocked_resolve_with_crossref_record_is_verified() -> None:
+    # Regression: serverless/data-center IPs are frequently bot-blocked from the
+    # publisher landing page, so the browser-style doi.org resolve fails. A real
+    # DOI with a Crossref record must still verify (not invalid_doi).
+    doi = "10.3390/su151712921"
+    # Browser-style resolve raises a transport error (simulating the block).
+    respx.get(
+        f"https://doi.org/{doi}",
+        headers__contains={"Accept": "text/html,application/xhtml+xml"},
+    ).mock(side_effect=httpx.ConnectError("blocked"))
+    # doi.org content negotiation also unavailable.
+    respx.get(f"https://doi.org/{doi}").mock(side_effect=httpx.ConnectError("blocked"))
+    # But Crossref has the record.
+    respx.get(f"https://api.crossref.org/works/{doi}").mock(
+        return_value=httpx.Response(
+            200, json=_crossref_work("Student engagement with science", "Lee", 2023, doi)
+        )
+    )
+    ref = CSLItem(
+        id="r9",
+        title="Student engagement with science",
+        author=[CSLName(family="Lee")],
+        issued_year=2023,
+        doi=doi,
+    )
+    async with CrossrefClient() as client:
+        result = await verify_reference(ref, client)
+    assert result.status == "verified"
+    assert result.source == "crossref"
+    assert result.severity == "INFO"
 
 
 @pytest.mark.asyncio
