@@ -43,7 +43,6 @@ _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 _CRITIC_KEYS = (
     "match_report_critic",
-    "formatted_critic",
     "verified_critic",
     "consistency",
 )
@@ -57,7 +56,6 @@ def _job_result(job: Job) -> JobResult:
         original_format=job.original_format,
         status=job.status,
         match_report=job.result.match_report,
-        formatted=job.result.formatted,
         verified=job.result.verified,
         patches=job.result.patches,
         critics=job.critics,
@@ -93,7 +91,6 @@ async def create_job(file: Annotated[UploadFile, File()]) -> JobResult:
     job.result = ReviewResult(
         match_report=state["match_report"],
         csl_items=state.get("csl_items", []),
-        formatted=state.get("formatted", {}),
         verified=state.get("verified", {}),
         patches=state.get("patch_proposals", []),
         llm_used=state.get("llm_used", False),

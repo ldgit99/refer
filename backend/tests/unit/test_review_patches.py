@@ -22,38 +22,52 @@ class FailingCrossrefClient:
         raise RuntimeError("Crossref search unavailable")
 
 
-def test_doi_suggestion_creates_patch() -> None:
+def test_dead_doi_creates_warning_patch() -> None:
     document = build_document(
         [
             "Body (Kim, 2024).",
             "References",
-            "Kim, S. (2024). A study. Journal, 1(1), 1-2.",
+            "Kim, S. (2024). A study. Journal, 1(1), 1-2. https://doi.org/10.1000/dead",
         ]
     )
     ref = ReferenceItem(
         index=0,
-        raw="Kim, S. (2024). A study. Journal, 1(1), 1-2.",
+        raw="Kim, S. (2024). A study. Journal, 1(1), 1-2. https://doi.org/10.1000/dead",
         authors=["Kim"],
         year=2024,
     )
     patches = build_patches(
         document=document,
         report=MatchReport(references=[ref]),
-        formatted={},
-        csl_items=[CSLItem(id="ref-0", title="A study")],
+        csl_items=[CSLItem(id="ref-0", title="A study", doi="10.1000/dead")],
         verified={
             "ref-0": VerifiedItem(
                 ref_id="ref-0",
-                status="doi_suggested",
-                confidence=0.96,
-                suggested_doi="10.1000/found",
-                severity="INFO",
+                status="invalid_doi",
+                doi="10.1000/dead",
+                doi_url="https://doi.org/10.1000/dead",
+                doi_resolves=False,
+                severity="CRITICAL",
+                note="DOI link did not open.",
             )
         },
     )
     assert len(patches) == 1
-    assert patches[0].kind == "doi_insert"
-    assert "https://doi.org/10.1000/found" in patches[0].after
+    assert patches[0].kind == "citation_comment"
+    assert patches[0].source == "F3"
+    assert "invalid_doi" in patches[0].comment
+
+
+def test_verified_doi_creates_no_patch() -> None:
+    document = build_document(["Body.", "References", "Kim, S. (2024). x."])
+    ref = ReferenceItem(index=0, raw="Kim, S. (2024). x.", authors=["Kim"], year=2024)
+    patches = build_patches(
+        document=document,
+        report=MatchReport(references=[ref]),
+        csl_items=[CSLItem(id="ref-0", title="x", doi="10.1/ok")],
+        verified={"ref-0": VerifiedItem(ref_id="ref-0", status="verified", doi_resolves=True)},
+    )
+    assert patches == []
 
 
 @pytest.mark.asyncio

@@ -28,19 +28,15 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     llm_provider: str = "auto"
     crossref_polite_email: str | None = None
-    kci_api_key: str | None = None
     langsmith_api_key: str | None = None
     langsmith_tracing: bool = False
     redis_url: str = "redis://localhost:6379/0"
 
-    # F3 (external metadata verification). Disable to keep the pipeline offline
-    # (tests, air-gapped demos). When enabled, references are checked against
-    # Crossref/OpenAlex live.
+    # F3 = "does the DOI link open?". Disable to keep the pipeline offline
+    # (tests, air-gapped demos); F1 matching still runs.
     f3_enabled: bool = True
-    # Max references verified concurrently (fan-out, research.md §7.7).
+    # Max DOI links checked concurrently (fan-out, research.md §7.7).
     f3_concurrency: int = 8
-    # Use OpenAlex as a secondary verifier (preferred for Korean titles).
-    openalex_enabled: bool = True
 
     # --- model routing (research.md §7.7) ---
     model_trivial: str = "claude-haiku-4-5"
@@ -51,16 +47,9 @@ class Settings(BaseSettings):
     openai_model_final: str = "gpt-4.1"
 
     # --- tunable thresholds (plan.md M6 §3) ---
+    # First-author fuzzy match threshold for F1 citation↔reference matching.
     fuzzy_match_threshold: float = 0.85
-    # Title similarity at/above this -> "verified". Lowered from 0.92 because
-    # subtitle/translation/abbreviation differences routinely sit in the 0.80s
-    # for real matches; the band below is "weak" rather than a hard mismatch.
-    doi_title_confidence: float = 0.85
-    # Title similarity in [doi_title_weak, doi_title_confidence) -> "verified_weak"
-    # (INFO, not a warning). Below this is a genuine title mismatch.
-    doi_title_weak: float = 0.6
     critic_revision_max: int = 3
-    hitl_confidence_gate: float = 0.7
 
     @property
     def cors_origin_list(self) -> list[str]:

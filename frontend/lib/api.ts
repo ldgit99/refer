@@ -39,16 +39,14 @@ export interface Patch {
   severity: Severity;
 }
 
+/** F3 result: does the reference's DOI link open? (no title/metadata compare) */
 export interface VerifiedItem {
   ref_id: string;
-  status: string;
-  confidence: number;
-  suggested_doi?: string | null;
+  status: "verified" | "invalid_doi" | "no_doi" | "skipped";
+  doi?: string | null;
   doi_url?: string | null;
   doi_resolves?: boolean | null;
-  title_matches?: boolean | null;
-  matched_title?: string | null;
-  /** Which metadata source confirmed the reference: crossref/doi.org/openalex/kci/none. */
+  /** Which signal confirmed the link: crossref/doi.org/none. */
   source?: string;
   severity: Severity;
   note: string;
@@ -60,13 +58,11 @@ export interface JobResult {
   original_format: string;
   status: string;
   match_report: MatchReport;
-  formatted: Record<string, string>;
   verified: Record<string, VerifiedItem>;
   patches: Patch[];
   critics?: Record<string, unknown>;
   hitl_queue?: unknown[];
   llm_used?: boolean;
-  revision_counts?: Record<string, number>;
 }
 
 /** Human-readable labels for F1 issue types (incl. duplicate_reference). */
@@ -85,9 +81,7 @@ export function reviewStats(job: JobResult) {
   const references = s.references ?? 0;
   const issues = s.issues ?? 0;
   const verifiedValues = Object.values(job.verified ?? {});
-  const verifiedOk = verifiedValues.filter((v) =>
-    ["verified", "verified_weak", "verified_external"].includes(v.status),
-  ).length;
+  const verifiedOk = verifiedValues.filter((v) => v.status === "verified").length;
   const matchRate =
     citations > 0
       ? Math.round((1 - (s.orphan_citation ?? 0) / citations) * 100)
