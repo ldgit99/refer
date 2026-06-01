@@ -52,6 +52,21 @@ export interface VerifiedItem {
   note: string;
 }
 
+export interface ReviewDiagnostics {
+  parser_version: string;
+  paragraph_count: number;
+  body_paragraph_count: number;
+  reference_paragraph_count: number;
+  references_start_index?: number | null;
+  references_section_chars: number;
+  parsed_reference_count: number;
+  citation_count: number;
+  issue_summary: Record<string, number>;
+  doi_summary: Record<string, number>;
+  reference_samples: string[];
+  warnings: string[];
+}
+
 export interface JobResult {
   job_id: string;
   filename: string;
@@ -63,6 +78,7 @@ export interface JobResult {
   critics?: Record<string, unknown>;
   hitl_queue?: unknown[];
   llm_used?: boolean;
+  diagnostics?: ReviewDiagnostics;
 }
 
 /** Human-readable labels for F1 issue types (incl. duplicate_reference). */

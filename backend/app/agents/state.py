@@ -14,6 +14,7 @@ from app.citation.csl import CSLItem
 from app.citation.extractor import InTextCitation
 from app.citation.matcher import MatchReport
 from app.citation.references import ReferenceItem
+from app.review import ReviewDiagnostics
 from app.verifier.verify import VerifiedItem
 from app.writers.base import Patch
 
@@ -57,6 +58,7 @@ class ReviewState(TypedDict, total=False):
     hitl_queue: list[ConflictItem]
     revision_counts: dict[str, int]
     llm_used: bool
+    diagnostics: ReviewDiagnostics
     # D1
     patch_proposals: list[Patch]
     accepted_patches: list[str]

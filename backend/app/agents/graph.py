@@ -33,6 +33,7 @@ def _attach_critics(state: ReviewState, result: ReviewResult) -> ReviewState:
     state["csl_items"] = result.csl_items
     state["patch_proposals"] = result.patches
     state["llm_used"] = result.llm_used
+    state["diagnostics"] = result.diagnostics
     state["match_report_critic"] = critics["match_report_critic"]
     state["verified_critic"] = critics["verified_critic"]
     state["consistency"] = critics["consistency"]

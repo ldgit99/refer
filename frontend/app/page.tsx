@@ -8,6 +8,7 @@ import {
   type JobResult,
   type OutputMode,
   type Patch,
+  type ReviewDiagnostics,
   type Severity,
   type VerifiedItem,
 } from "@/lib/api";
@@ -62,6 +63,15 @@ const SOURCE_LABELS: Record<string, string> = {
   crossref: "Crossref",
   "doi.org": "doi.org",
 };
+
+const DOI_FILTERS = [
+  { id: "attention", label: "확인 필요" },
+  { id: "no_doi", label: "링크 없음" },
+  { id: "verified", label: "정상" },
+  { id: "all", label: "전체" },
+] as const;
+
+type DoiFilter = (typeof DOI_FILTERS)[number]["id"];
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -201,6 +211,7 @@ export default function Home() {
               <aside className="space-y-6">
                 <IssuePanel result={result} />
                 <DoiPanel items={Object.values(result.verified ?? {})} />
+                <DiagnosticsPanel diagnostics={result.diagnostics} />
               </aside>
 
               <PatchWorkspace
@@ -348,9 +359,33 @@ function SummaryTile({
 }
 
 function IssuePanel({ result }: { result: JobResult }) {
+  const groups = Object.entries(
+    result.match_report.issues.reduce<Record<string, typeof result.match_report.issues>>(
+      (acc, issue) => {
+        const key = issue.type;
+        acc[key] = acc[key] ?? [];
+        acc[key].push(issue);
+        return acc;
+      },
+      {},
+    ),
+  );
+
   return (
     <section className="rounded-md border border-[#2BA8A2]/20 bg-white p-4 shadow-[0_4px_20px_rgba(43,168,162,0.10)]">
       <PanelTitle title="인용 이슈" count={result.match_report.issues.length} />
+      {groups.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {groups.map(([type, issues]) => (
+            <span
+              key={type}
+              className="rounded-full border border-[#2BA8A2]/20 bg-[#E8F6F5] px-2.5 py-1 text-xs font-bold text-[#1E8C86]"
+            >
+              {ISSUE_TYPE_LABELS[type] ?? type} {issues.length}
+            </span>
+          ))}
+        </div>
+      )}
       <ul className="mt-3 space-y-2">
         {result.match_report.issues.map((issue, i) => (
           <li key={`${issue.type}-${i}`} className="rounded-md border border-[#2BA8A2]/15 border-l-4 border-l-[#EF6C4A] bg-white p-3">
@@ -388,17 +423,21 @@ function doiStatusLabel(status: string): string {
 
 function DoiPanel({ items }: { items: VerifiedItem[] }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [doiFilter, setDoiFilter] = useState<DoiFilter>("attention");
   const verifiedCount = items.filter((item) =>
     VERIFIED_STATUSES.has(item.status),
   ).length;
   const noDoiCount = items.filter((item) => item.status === "no_doi").length;
   const errorCount = items.filter((item) => item.status === "invalid_doi").length;
   const warningCount = items.filter((item) => item.status === "skipped").length;
-  // Only links with a warning/error need attention — verified and no-DOI rows
-  // are summarised in the counts above and hidden to keep the list short.
-  const problemItems = items.filter(
-    (item) => item.status === "invalid_doi" || item.status === "skipped",
-  );
+  const visibleItems = items.filter((item) => {
+    if (doiFilter === "attention") {
+      return item.status === "invalid_doi" || item.status === "skipped";
+    }
+    if (doiFilter === "no_doi") return item.status === "no_doi";
+    if (doiFilter === "verified") return VERIFIED_STATUSES.has(item.status);
+    return true;
+  });
 
   function toggleExpanded(id: string) {
     setExpandedIds((current) => {
@@ -421,8 +460,24 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
         <DoiStat label="검증 보류" value={warningCount} tone="warning" />
         <DoiStat label="링크 오류" value={errorCount} tone="error" />
       </div>
+      <div className="mt-3 flex flex-wrap gap-1">
+        {DOI_FILTERS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setDoiFilter(item.id)}
+            className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+              doiFilter === item.id
+                ? "bg-[#2BA8A2] text-white shadow-[0_4px_20px_rgba(43,168,162,0.30)]"
+                : "bg-[#E8F6F5] text-[#1E8C86] hover:bg-white"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
       <div className="mt-3 space-y-2">
-        {problemItems.map((item) => (
+        {visibleItems.map((item) => (
           <DoiRow
             key={item.ref_id}
             expanded={expandedIds.has(item.ref_id)}
@@ -430,12 +485,12 @@ function DoiPanel({ items }: { items: VerifiedItem[] }) {
             onToggle={() => toggleExpanded(item.ref_id)}
           />
         ))}
-        {problemItems.length === 0 && (
+        {visibleItems.length === 0 && (
           <p className="rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-3 text-sm font-medium text-[#1E8C86]">
             {items.length === 0
               ? "검토할 DOI가 없습니다."
-              : noDoiCount > 0
-                ? `링크 오류는 없고, DOI 링크가 없는 참고문헌이 ${noDoiCount}개 있습니다.`
+              : doiFilter === "attention" && noDoiCount > 0
+                ? `확인 필요한 DOI 오류는 없고, DOI 링크가 없는 참고문헌이 ${noDoiCount}개 있습니다.`
                 : "경고·오류가 있는 DOI가 없습니다. ✅"}
           </p>
         )}
@@ -546,6 +601,88 @@ function DoiRow({
         </div>
       )}
     </article>
+  );
+}
+
+function DiagnosticsPanel({
+  diagnostics,
+}: {
+  diagnostics?: ReviewDiagnostics;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!diagnostics) return null;
+
+  return (
+    <section className="rounded-md border border-[#2BA8A2]/20 bg-white p-4 shadow-[0_4px_20px_rgba(43,168,162,0.10)]">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 border-b-2 border-dashed border-[#2BA8A2]/15 pb-2 text-left"
+      >
+        <span className="text-sm font-extrabold uppercase tracking-wide text-[#1E8C86]">
+          분석 진단
+        </span>
+        <span className="rounded-full bg-[#E8F6F5] px-2 py-0.5 text-xs font-extrabold text-[#1E8C86]">
+          {open ? "접기" : "열기"}
+        </span>
+      </button>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <DoiStat label="전체 문단" value={diagnostics.paragraph_count} tone="neutral" />
+        <DoiStat
+          label="참고문헌 문단"
+          value={diagnostics.reference_paragraph_count}
+          tone="neutral"
+        />
+        <DoiStat
+          label="파싱된 문헌"
+          value={diagnostics.parsed_reference_count}
+          tone="ok"
+        />
+        <DoiStat label="본문 인용" value={diagnostics.citation_count} tone="ok" />
+      </div>
+
+      {diagnostics.warnings.length > 0 && (
+        <div className="mt-3 space-y-1">
+          {diagnostics.warnings.map((warning) => (
+            <p
+              key={warning}
+              className="rounded-md border border-[#FFD23F]/45 bg-[#FFF8E7] px-3 py-2 text-xs font-bold leading-5 text-[#8A6A00]"
+            >
+              {warning}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-3 space-y-3 rounded-md border border-[#2BA8A2]/10 bg-[#EFF8F7] p-3 text-xs leading-5 text-[#34605C]">
+          <div className="grid gap-1">
+            <div>파서 버전: {diagnostics.parser_version}</div>
+            <div>
+              참고문헌 시작 문단:{" "}
+              {diagnostics.references_start_index === null ||
+              diagnostics.references_start_index === undefined
+                ? "미탐지"
+                : diagnostics.references_start_index + 1}
+            </div>
+            <div>참고문헌 후보 길이: {diagnostics.references_section_chars}자</div>
+          </div>
+          {diagnostics.reference_samples.length > 0 && (
+            <div>
+              <div className="font-extrabold text-[#1E8C86]">참고문헌 샘플</div>
+              <ol className="mt-1 space-y-1">
+                {diagnostics.reference_samples.map((sample, index) => (
+                  <li key={`${index}-${sample}`} className="break-words">
+                    {index + 1}. {sample}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

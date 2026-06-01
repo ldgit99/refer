@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.state import ConflictItem, CriticVerdict
 from app.citation.matcher import MatchReport
+from app.review import ReviewDiagnostics
 from app.verifier.verify import VerifiedItem
 from app.writers.base import OutputMode, Patch
 
@@ -30,6 +31,7 @@ class JobResult(BaseModel):
     critics: dict[str, CriticVerdict] = Field(default_factory=dict)
     hitl_queue: list[ConflictItem] = Field(default_factory=list)
     llm_used: bool = False
+    diagnostics: ReviewDiagnostics = Field(default_factory=ReviewDiagnostics)
 
 
 class ApplyRequest(BaseModel):

@@ -28,12 +28,28 @@ from app.writers.base import ParagraphRef, Patch
 MAX_VERIFICATION_ERROR_LEN = 180
 
 
+class ReviewDiagnostics(BaseModel):
+    parser_version: str = "2026-06-02.reference-diagnostics"
+    paragraph_count: int = 0
+    body_paragraph_count: int = 0
+    reference_paragraph_count: int = 0
+    references_start_index: int | None = None
+    references_section_chars: int = 0
+    parsed_reference_count: int = 0
+    citation_count: int = 0
+    issue_summary: dict[str, int] = Field(default_factory=dict)
+    doi_summary: dict[str, int] = Field(default_factory=dict)
+    reference_samples: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ReviewResult(BaseModel):
     match_report: MatchReport
     csl_items: list[CSLItem] = Field(default_factory=list)
     verified: dict[str, VerifiedItem] = Field(default_factory=dict)
     patches: list[Patch] = Field(default_factory=list)
     llm_used: bool = False
+    diagnostics: ReviewDiagnostics = Field(default_factory=ReviewDiagnostics)
 
 
 def _ref_paragraph_index(document: ParsedDocument, ref: ReferenceItem) -> int:
@@ -113,6 +129,46 @@ def build_patches(
     return patches
 
 
+def build_diagnostics(
+    document: ParsedDocument,
+    report: MatchReport,
+    verified: dict[str, VerifiedItem],
+) -> ReviewDiagnostics:
+    issue_summary: dict[str, int] = {}
+    for issue in report.issues:
+        issue_summary[issue.type] = issue_summary.get(issue.type, 0) + 1
+
+    doi_summary: dict[str, int] = {}
+    for item in verified.values():
+        doi_summary[item.status] = doi_summary.get(item.status, 0) + 1
+
+    warnings: list[str] = []
+    if document.references_section is None:
+        warnings.append("참고문헌 섹션을 찾지 못했습니다.")
+    elif not report.references:
+        warnings.append("참고문헌 섹션은 찾았지만 항목을 파싱하지 못했습니다.")
+    if report.stats.get("orphan_reference", 0) >= max(8, len(report.references) // 3):
+        warnings.append(
+            "미인용 참고문헌이 많습니다. 참고문헌 경계 또는 항목 병합 결과를 확인하세요."
+        )
+    if document.original_format in {"hwp", "hwpx"}:
+        warnings.append("HWP/HWPX는 문단 추출 방식에 따라 참고문헌 경계가 흔들릴 수 있습니다.")
+
+    return ReviewDiagnostics(
+        paragraph_count=len(document.paragraphs),
+        body_paragraph_count=len(document.body_paragraphs()),
+        reference_paragraph_count=len(document.reference_paragraphs()),
+        references_start_index=document.references_start_index,
+        references_section_chars=len(document.references_section or ""),
+        parsed_reference_count=len(report.references),
+        citation_count=len(report.citations),
+        issue_summary=issue_summary,
+        doi_summary=doi_summary,
+        reference_samples=[ref.raw[:220] for ref in report.references[:5]],
+        warnings=warnings,
+    )
+
+
 def _f1(document: ParsedDocument) -> tuple[MatchReport, list[CSLItem]]:
     citations = extract_citations(document)
     references = parse_references(document.references_section)
@@ -151,12 +207,14 @@ def review_sync(document: ParsedDocument) -> ReviewResult:
     """F1 only (no network)."""
     report, csl_items = _f1(document)
     patches = build_patches(document, report, csl_items, verified={})
+    diagnostics = build_diagnostics(document, report, verified={})
     return ReviewResult(
         match_report=report,
         csl_items=csl_items,
         verified={},
         patches=patches,
         llm_used=False,
+        diagnostics=diagnostics,
     )
 
 
@@ -171,12 +229,14 @@ async def review_with_verification(
 
     if client is None and not settings.f3_enabled:
         patches = build_patches(document, report, csl_items, verified)
+        diagnostics = build_diagnostics(document, report, verified)
         return ReviewResult(
             match_report=report,
             csl_items=csl_items,
             verified=verified,
             patches=patches,
             llm_used=llm_used,
+            diagnostics=diagnostics,
         )
 
     own_client = client is None
@@ -193,10 +253,12 @@ async def review_with_verification(
         verified = {c.id: _verification_failure_item(c, exc) for c in csl_items}
 
     patches = build_patches(document, report, csl_items, verified)
+    diagnostics = build_diagnostics(document, report, verified)
     return ReviewResult(
         match_report=report,
         csl_items=csl_items,
         verified=verified,
         patches=patches,
         llm_used=llm_used,
+        diagnostics=diagnostics,
     )

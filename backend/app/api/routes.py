@@ -61,6 +61,7 @@ def _job_result(job: Job) -> JobResult:
         critics=job.critics,
         hitl_queue=job.hitl_queue,
         llm_used=job.result.llm_used,
+        diagnostics=job.result.diagnostics,
     )
 
 
@@ -94,6 +95,7 @@ async def create_job(file: Annotated[UploadFile, File()]) -> JobResult:
         verified=state.get("verified", {}),
         patches=state.get("patch_proposals", []),
         llm_used=state.get("llm_used", False),
+        diagnostics=state.get("diagnostics"),
     )
     job.critics = {k: state[k] for k in _CRITIC_KEYS if k in state}
     job.hitl_queue = state.get("hitl_queue", [])
