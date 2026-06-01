@@ -1,4 +1,4 @@
-"""Reference-list parsing into lightweight reference items (research.md §2.4).
+"""Reference-list parsing into lightweight reference items.
 
 This is the deterministic fallback used in M1. The richer CSL-JSON extraction
 (GROBID / LLM) arrives with the ReferenceParserAgent in M3.
@@ -14,9 +14,11 @@ _NUMBERED_PREFIX_RE = re.compile(r"^\s*\[?(\d+)\]?[.)]?\s+")
 _YEAR_RE = re.compile(r"\(?((?:19|20)\d{2})([a-z])?\)?")
 _DOI_RE = re.compile(r"10\.\d{4,9}/", re.IGNORECASE)
 # "Kim, S.", "Lee, J.-H.", "van Dijk, T." style family names.
-_LATIN_FAMILY_RE = re.compile(r"\b([A-Z][a-zA-Z'’\-]+),\s*(?:[A-Z]\.?\s*)+")
+_LATIN_FAMILY_RE = re.compile(r"\b([A-Z][a-zA-Z'\u2019\-]+),\s*(?:[A-Z]\.?\s*)+")
+_ORG_AUTHOR_RE = re.compile(r"^\s*([A-Z][A-Za-z&.,'\u2019\- ]{3,100}?)\.?\s*\(")
+_ORG_YEAR_RE = re.compile(r"^\s*[A-Z][A-Za-z&.,'\u2019\- ]{3,100}\.?\s*\((?:19|20)\d{2}[a-z]?\)")
 # Korean author tokens at the start of an entry.
-_KOREAN_FAMILY_RE = re.compile(r"[가-힣]{2,4}")
+_KOREAN_FAMILY_RE = re.compile(r"[\uac00-\ud7a3]{2,4}")
 
 
 class ReferenceItem(BaseModel):
@@ -39,10 +41,39 @@ def _extract_authors(text: str) -> list[str]:
     families = [m.group(1) for m in _LATIN_FAMILY_RE.finditer(text)]
     if families:
         return families
+    org = _ORG_AUTHOR_RE.match(text)
+    if org:
+        author = org.group(1).strip().rstrip(".")
+        if author:
+            return [author]
     # Korean: take family-name tokens appearing before the year.
     head = text.split("(", 1)[0]
     korean = _KOREAN_FAMILY_RE.findall(head)
     return korean
+
+
+def _starts_reference_entry(text: str) -> bool:
+    """Return true only for lines that look like the first line of a ref."""
+    stripped = text.strip()
+    if len(stripped) < 12:
+        return False
+    if _NUMBERED_PREFIX_RE.match(stripped):
+        return True
+
+    year = _YEAR_RE.search(stripped)
+    if not year:
+        return False
+    # Continuation lines can contain older years in titles or publisher names.
+    if year.start() > 140:
+        return False
+
+    if _LATIN_FAMILY_RE.search(stripped[: year.start() + 1]):
+        return True
+    if _ORG_YEAR_RE.match(stripped):
+        return True
+
+    head = stripped[: year.start()]
+    return bool(_KOREAN_FAMILY_RE.search(head))
 
 
 def _looks_like_reference_entry(text: str) -> bool:
@@ -54,17 +85,27 @@ def _looks_like_reference_entry(text: str) -> bool:
         return True
     if not _YEAR_RE.search(stripped):
         return False
-    if _LATIN_FAMILY_RE.search(stripped):
+    if _LATIN_FAMILY_RE.search(stripped) or _ORG_YEAR_RE.match(stripped):
         return True
     head = stripped.split("(", 1)[0]
     return bool(_KOREAN_FAMILY_RE.search(head))
+
+
+def _looks_like_section_fragment(text: str) -> bool:
+    stripped = text.strip()
+    if _YEAR_RE.search(stripped) or _DOI_RE.search(stripped):
+        return False
+    if len(stripped) > 30:
+        return False
+    return bool(re.match(r"^[\uac00-\ud7a3A-Za-z0-9]{1,4}[.)]\s+\S+", stripped))
 
 
 def _split_entries(section: str) -> list[str]:
     """Split a reference block into individual entries.
 
     Numbered styles split on the leading "[n]"/"n." prefix; otherwise each
-    non-empty line (hanging indent) is treated as one entry.
+    entry-start line opens a record and wrapped HWPX paragraphs are merged into
+    the previous entry.
     """
     lines = [ln.rstrip() for ln in section.splitlines()]
     lines = [ln for ln in lines if ln.strip()]
@@ -72,7 +113,7 @@ def _split_entries(section: str) -> list[str]:
         return []
 
     numbered = sum(1 for ln in lines if _NUMBERED_PREFIX_RE.match(ln))
-    if numbered >= max(2, len(lines) // 2):
+    if numbered >= 2 or _NUMBERED_PREFIX_RE.match(lines[0]):
         # Merge wrapped continuation lines into their numbered entry.
         entries: list[str] = []
         for ln in lines:
@@ -83,7 +124,20 @@ def _split_entries(section: str) -> list[str]:
             else:
                 entries.append(ln)
         return entries
-    return lines
+
+    entries: list[str] = []
+    current: str | None = None
+    for ln in lines:
+        stripped = ln.strip()
+        if _starts_reference_entry(stripped):
+            if current:
+                entries.append(current)
+            current = stripped
+        elif current and not _looks_like_section_fragment(stripped):
+            current += " " + stripped
+    if current:
+        entries.append(current)
+    return entries
 
 
 def parse_references(section: str | None) -> list[ReferenceItem]:
