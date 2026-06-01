@@ -152,7 +152,9 @@ export default function Home() {
   }
 
   async function copyAfterText(patch: Patch) {
-    await navigator.clipboard.writeText(patch.after || patch.comment);
+    await navigator.clipboard.writeText(
+      patch.kind === "citation_comment" ? patch.comment : patch.after || patch.comment,
+    );
     setCopiedPatchId(patch.id);
     window.setTimeout(() => setCopiedPatchId(""), 1400);
   }
@@ -711,6 +713,7 @@ function PatchDetail({
   onCopyAfter: () => void;
   onToggle: () => void;
 }) {
+  const isCommentOnly = patch.kind === "citation_comment";
   return (
     <article>
       <div className="flex flex-col gap-3 border-b-2 border-dashed border-[#2BA8A2]/20 pb-4 md:flex-row md:items-start md:justify-between">
@@ -735,7 +738,7 @@ function PatchDetail({
             onClick={onCopyAfter}
             className="rounded-full border border-[#2BA8A2]/30 bg-white px-3 py-2 text-sm font-bold text-[#1E8C86] hover:bg-[#E8F6F5] hover:shadow-[0_4px_20px_rgba(43,168,162,0.12)]"
           >
-            {copied ? "복사됨" : "제안 복사"}
+            {copied ? "복사됨" : isCommentOnly ? "메모 복사" : "제안 복사"}
           </button>
           <button
             type="button"
@@ -751,10 +754,20 @@ function PatchDetail({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <DiffBlock label="Before" tone="before" text={patch.before || "(기존 텍스트 없음)"} />
-        <DiffBlock label="After" tone="after" text={patch.after || patch.comment} />
-      </div>
+      {isCommentOnly ? (
+        <div className="mt-4">
+          <DiffBlock
+            label="대상 텍스트"
+            tone="before"
+            text={patch.before || "(대상 텍스트 없음)"}
+          />
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          <DiffBlock label="Before" tone="before" text={patch.before || "(기존 텍스트 없음)"} />
+          <DiffBlock label="After" tone="after" text={patch.after || "(수정 텍스트 없음)"} />
+        </div>
+      )}
 
       {patch.comment && (
         <div className="mt-4 rounded-md border border-[#2BA8A2]/15 bg-[#E8F6F5] p-4">
