@@ -24,19 +24,16 @@ async def _run_specialists(document: ParsedDocument) -> ReviewResult:
 def _attach_critics(state: ReviewState, result: ReviewResult) -> ReviewState:
     critics = run_all_critics(
         result.match_report,
-        result.formatted,
         result.verified,
         citations=result.match_report.citations,
         references=result.match_report.references,
     )
     state["match_report"] = result.match_report
-    state["formatted"] = result.formatted
     state["verified"] = result.verified
     state["csl_items"] = result.csl_items
     state["patch_proposals"] = result.patches
     state["llm_used"] = result.llm_used
     state["match_report_critic"] = critics["match_report_critic"]
-    state["formatted_critic"] = critics["formatted_critic"]
     state["verified_critic"] = critics["verified_critic"]
     state["consistency"] = critics["consistency"]
     state["hitl_queue"] = build_hitl_queue(critics, result.verified)

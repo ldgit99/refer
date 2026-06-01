@@ -32,10 +32,11 @@ class Settings(BaseSettings):
     langsmith_tracing: bool = False
     redis_url: str = "redis://localhost:6379/0"
 
-    # F3 (external metadata verification). Disable to keep the pipeline offline
-    # (tests, air-gapped demos). When enabled, references are checked against
-    # Crossref/OpenAlex live.
+    # F3 = "does the DOI link open?". Disable to keep the pipeline offline
+    # (tests, air-gapped demos); F1 matching still runs.
     f3_enabled: bool = True
+    # Max DOI links checked concurrently (fan-out, research.md §7.7).
+    f3_concurrency: int = 8
 
     # --- model routing (research.md §7.7) ---
     model_trivial: str = "claude-haiku-4-5"
@@ -46,10 +47,9 @@ class Settings(BaseSettings):
     openai_model_final: str = "gpt-4.1"
 
     # --- tunable thresholds (plan.md M6 §3) ---
+    # First-author fuzzy match threshold for F1 citation↔reference matching.
     fuzzy_match_threshold: float = 0.85
-    doi_title_confidence: float = 0.92
     critic_revision_max: int = 3
-    hitl_confidence_gate: float = 0.7
 
     @property
     def cors_origin_list(self) -> list[str]:

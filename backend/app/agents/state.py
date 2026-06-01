@@ -49,8 +49,6 @@ class ReviewState(TypedDict, total=False):
     csl_items: list[CSLItem]
     match_report: MatchReport
     match_report_critic: CriticVerdict
-    formatted: dict[str, str]
-    formatted_critic: CriticVerdict
     # Phase 3
     verified: dict[str, VerifiedItem]
     verified_critic: CriticVerdict

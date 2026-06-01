@@ -1,10 +1,8 @@
-"""Critic agents (research.md §7.3 Critic table, §7.4 protocol).
+"""Critic agents for the two-feature pipeline (research.md §7.3, §7.4).
 
-All critics here are the deterministic baseline. The LLM-assisted branches
-(C2 non-standard types, C3 semantic title equivalence) activate only when an API
-key is present; otherwise the deterministic verdict stands. Critics receive the
-specialist *conclusion + original input*, never the specialist's reasoning
-(information asymmetry, §7.1).
+Scope is F1 (matching) and F3 (DOI link opens) only. The former APA-style critic
+(C2) has been removed along with F2. Critics receive the specialist conclusion +
+original input (information asymmetry, §7.1).
 """
 
 from __future__ import annotations
@@ -34,44 +32,17 @@ def citation_auditor(report: MatchReport) -> CriticVerdict:
     )
 
 
-def apa_style_critic(formatted: dict[str, str]) -> CriticVerdict:
-    """C2 — APA 7 rule checks on formatted strings."""
-    problems: list[str] = []
-    for ref_id, text in formatted.items():
-        if not text:
-            continue
-        if " and " in text and "&" not in text:
-            problems.append(f"{ref_id}: 저자 구분에 '&' 대신 'and' 사용")
-        if "(n.d.)" in text:
-            problems.append(f"{ref_id}: 연도 누락")
-    agree = not problems
-    return CriticVerdict(
-        agent="C2-APAStyleCritic",
-        agree=agree,
-        revision_request="; ".join(problems),
-        severity="INFO",
-    )
-
-
 def evidence_critic(verified: dict[str, VerifiedItem]) -> CriticVerdict:
-    """C3 — independent re-read of verification results (hallucination guard).
-
-    Downgrades any 'verified' that the verifier itself noted disagreements on,
-    and surfaces invalid DOIs as CRITICAL.
-    """
-    downgrades: list[str] = []
-    critical = False
-    for ref_id, v in verified.items():
-        if v.status == "verified" and v.note:
-            downgrades.append(f"{ref_id}: '{v.note}' 근거로 WARNING 강등 권고")
-        if v.status == "invalid_doi":
-            critical = True
-    agree = not downgrades and not critical
+    """C3 — re-read of DOI link verification. Invalid (non-opening) DOIs -> CRITICAL."""
+    invalid = [ref_id for ref_id, v in verified.items() if v.status == "invalid_doi"]
+    agree = not invalid
     return CriticVerdict(
         agent="C3-EvidenceCritic",
         agree=agree,
-        revision_request="; ".join(downgrades),
-        severity="CRITICAL" if critical else ("WARNING" if downgrades else "INFO"),
+        revision_request=(
+            "" if agree else f"{len(invalid)}건의 DOI 링크가 열리지 않습니다: {', '.join(invalid)}"
+        ),
+        severity="CRITICAL" if invalid else "INFO",
     )
 
 
@@ -79,18 +50,22 @@ def consistency_auditor(
     report: MatchReport,
     verified: dict[str, VerifiedItem],
 ) -> CriticVerdict:
-    """C4 — cross-stage contradiction check (F1 matched but F3 not_found, etc.)."""
+    """C4 — cross-feature check: a reference matched in the body but its DOI is dead."""
     contradictions: list[str] = []
     matched_ref_indices = {
         i.reference_index for i in report.issues if i.type != "orphan_reference"
     }
+    cited_ref_indices = {ref.index for ref in report.references} - {
+        i.reference_index for i in report.issues if i.type == "orphan_reference"
+    }
+    _ = matched_ref_indices  # retained for clarity; cited set drives the check
     for ref in report.references:
-        if ref.index in matched_ref_indices:
+        if ref.index not in cited_ref_indices:
             continue
         v = verified.get(f"ref-{ref.index}")
-        if v and v.status == "not_found":
+        if v and v.status == "invalid_doi":
             contradictions.append(
-                f"ref-{ref.index}: 본문 인용과 매칭됐으나 외부 검증 실패(not_found)"
+                f"ref-{ref.index}: 본문에서 인용된 문헌이지만 DOI 링크가 열리지 않습니다."
             )
     agree = not contradictions
     return CriticVerdict(
@@ -103,14 +78,12 @@ def consistency_auditor(
 
 def run_all_critics(
     report: MatchReport,
-    formatted: dict[str, str],
     verified: dict[str, VerifiedItem],
     citations: list[InTextCitation] | None = None,
     references: list[ReferenceItem] | None = None,
 ) -> dict[str, CriticVerdict]:
     return {
         "match_report_critic": citation_auditor(report),
-        "formatted_critic": apa_style_critic(formatted),
         "verified_critic": evidence_critic(verified),
         "consistency": consistency_auditor(report, verified),
     }

@@ -12,7 +12,7 @@ import {
   type VerifiedItem,
 } from "@/lib/api";
 
-type PatchFilter = "all" | "selected" | "critical" | "warning" | "F1" | "F2" | "F3";
+type PatchFilter = "all" | "selected" | "critical" | "warning" | "F1" | "F3";
 
 const SEVERITY_STYLES: Record<Severity, string> = {
   CRITICAL: "border-[#EF6C4A]/30 bg-[#FFF0EC] text-[#B84428]",
@@ -20,9 +20,8 @@ const SEVERITY_STYLES: Record<Severity, string> = {
   INFO: "border-[#5DADE2]/35 bg-[#EAF5FC] text-[#1F6F9F]",
 };
 
-const SOURCE_ACCENT: Record<Patch["source"], string> = {
+const SOURCE_ACCENT: Record<string, string> = {
   F1: "border-l-[#2BA8A2]",
-  F2: "border-l-[#FFD23F]",
   F3: "border-l-[#5DADE2]",
 };
 
@@ -32,7 +31,6 @@ const FILTERS: Array<{ id: PatchFilter; label: string }> = [
   { id: "critical", label: "긴급" },
   { id: "warning", label: "주의" },
   { id: "F1", label: "인용" },
-  { id: "F2", label: "APA" },
   { id: "F3", label: "DOI" },
 ];
 
@@ -43,12 +41,26 @@ const MODE_LABELS: Record<OutputMode, string> = {
 };
 
 const DOI_STATUS_LABELS: Record<string, string> = {
-  verified: "검증됨",
-  doi_mismatch: "제목 불일치",
+  verified: "링크 열림",
   invalid_doi: "링크 오류",
-  doi_suggested: "DOI 후보",
-  not_found: "메타데이터 없음",
+  no_doi: "DOI 없음",
   skipped: "검증 보류",
+};
+
+// Statuses that count as a successful verification (not a problem).
+const VERIFIED_STATUSES = new Set(["verified"]);
+
+const ISSUE_TYPE_LABELS: Record<string, string> = {
+  orphan_citation: "미수록 인용",
+  orphan_reference: "미인용 문헌",
+  year_mismatch: "연도 불일치",
+  author_count_mismatch: "et al. 규칙",
+  duplicate_reference: "중복 문헌",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  crossref: "Crossref",
+  "doi.org": "doi.org",
 };
 
 export default function Home() {
@@ -70,7 +82,7 @@ export default function Home() {
       if (filter === "selected") return selectedPatchIds.has(patch.id);
       if (filter === "critical") return patch.severity === "CRITICAL";
       if (filter === "warning") return patch.severity === "WARNING";
-      if (filter === "F1" || filter === "F2" || filter === "F3") {
+      if (filter === "F1" || filter === "F3") {
         return patch.source === filter;
       }
       return true;
@@ -285,7 +297,7 @@ function SummaryBand({
   const issueCount = result.match_report.stats.issues ?? result.match_report.issues.length;
   const doiItems = Object.values(result.verified ?? {});
   const doiFailed = doiItems.filter(
-    (item) => item.doi_resolves === false || item.title_matches === false,
+    (item) => item.status === "invalid_doi",
   ).length;
 
   return (
@@ -341,7 +353,10 @@ function IssuePanel({ result }: { result: JobResult }) {
         {result.match_report.issues.map((issue, i) => (
           <li key={`${issue.type}-${i}`} className="rounded-md border border-[#2BA8A2]/15 border-l-4 border-l-[#EF6C4A] bg-white p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <SeverityBadge severity={issue.severity} label={issue.type} />
+              <SeverityBadge
+                severity={issue.severity}
+                label={ISSUE_TYPE_LABELS[issue.type] ?? issue.type}
+              />
               {issue.paragraph_index !== null && issue.paragraph_index !== undefined && (
                 <span className="text-xs font-medium text-[#5E7E7A]">문단 {issue.paragraph_index + 1}</span>
               )}
@@ -371,7 +386,9 @@ function doiStatusLabel(status: string): string {
 
 function DoiPanel({ items }: { items: VerifiedItem[] }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const verifiedCount = items.filter((item) => item.status === "verified").length;
+  const verifiedCount = items.filter((item) =>
+    VERIFIED_STATUSES.has(item.status),
+  ).length;
   const errorCount = items.filter(
     (item) => item.severity === "CRITICAL" || item.status === "invalid_doi",
   ).length;
@@ -448,8 +465,9 @@ function DoiRow({
   item: VerifiedItem;
   onToggle: () => void;
 }) {
-  const showNote = item.status !== "verified" && item.note;
+  const showNote = !VERIFIED_STATUSES.has(item.status) && item.note;
   const displayUrl = item.doi_url ? compactDoiUrl(item.doi_url) : "";
+  const sourceLabel = item.source ? SOURCE_LABELS[item.source] : undefined;
 
   return (
     <article className="rounded-md border border-[#2BA8A2]/15 border-l-4 border-l-[#5DADE2] bg-white p-3">
@@ -459,7 +477,11 @@ function DoiRow({
             <span className="font-mono text-xs font-bold text-[#5E7E7A]">{item.ref_id}</span>
             <SeverityBadge severity={item.severity} label={doiStatusLabel(item.status)} />
             <StatusPill ok={item.doi_resolves} label="링크" />
-            <StatusPill ok={item.title_matches} label="제목" />
+            {sourceLabel && (
+              <span className="rounded-full border border-[#2BA8A2]/25 bg-[#E8F6F5] px-2 py-0.5 text-[10px] font-bold text-[#1E8C86]">
+                {sourceLabel}
+              </span>
+            )}
           </div>
           <div className="mt-2 flex min-w-0 items-center gap-2 text-xs font-medium text-[#5E7E7A]">
             {item.doi_url ? (
@@ -475,13 +497,7 @@ function DoiRow({
             ) : (
               <span>DOI 링크 없음</span>
             )}
-            <span className="shrink-0">신뢰도 {(item.confidence * 100).toFixed(0)}%</span>
           </div>
-          {item.matched_title && (
-            <p className="mt-1 truncate text-xs text-[#34605C]" title={item.matched_title}>
-              제목: {item.matched_title}
-            </p>
-          )}
         </div>
         <button
           type="button"
@@ -506,12 +522,6 @@ function DoiRow({
               >
                 {item.doi_url}
               </a>
-            </div>
-          )}
-          {item.matched_title && (
-            <div>
-              <div className="font-extrabold text-[#1E8C86]">매칭 제목</div>
-              <p>{item.matched_title}</p>
             </div>
           )}
           {showNote && (

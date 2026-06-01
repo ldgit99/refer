@@ -25,7 +25,6 @@ class JobResult(BaseModel):
     original_format: str
     status: str = "done"
     match_report: MatchReport
-    formatted: dict[str, str] = Field(default_factory=dict)
     verified: dict[str, VerifiedItem] = Field(default_factory=dict)
     patches: list[Patch] = Field(default_factory=list)
     critics: dict[str, CriticVerdict] = Field(default_factory=dict)

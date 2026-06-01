@@ -43,7 +43,6 @@ _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 _CRITIC_KEYS = (
     "match_report_critic",
-    "formatted_critic",
     "verified_critic",
     "consistency",
 )
@@ -57,7 +56,6 @@ def _job_result(job: Job) -> JobResult:
         original_format=job.original_format,
         status=job.status,
         match_report=job.result.match_report,
-        formatted=job.result.formatted,
         verified=job.result.verified,
         patches=job.result.patches,
         critics=job.critics,
@@ -93,7 +91,6 @@ async def create_job(file: Annotated[UploadFile, File()]) -> JobResult:
     job.result = ReviewResult(
         match_report=state["match_report"],
         csl_items=state.get("csl_items", []),
-        formatted=state.get("formatted", {}),
         verified=state.get("verified", {}),
         patches=state.get("patch_proposals", []),
         llm_used=state.get("llm_used", False),
@@ -102,6 +99,7 @@ async def create_job(file: Annotated[UploadFile, File()]) -> JobResult:
     job.hitl_queue = state.get("hitl_queue", [])
     job.status = "done"
     store.add_event(job.id, "done", f"{len(job.result.patches)} patches")
+    store.save(job)
 
     return _job_result(job)
 
@@ -139,6 +137,7 @@ async def apply_job(job_id: str, body: ApplyRequest) -> ApplyResponse:
     job.edited_bytes = edited
     job.status = "applied"
     store.add_event(job.id, "applied", f"{len(patches)} patches, mode={body.mode}")
+    store.save(job)
 
     return ApplyResponse(
         job_id=job.id,
@@ -187,6 +186,7 @@ async def resolve_hitl(job_id: str, body: HitlResolveRequest) -> HitlResolveResp
         if c.id == body.conflict_id:
             c.resolved = True
             c.resolution = body.choice
+            store.save(job)
             return HitlResolveResponse(
                 job_id=job.id, conflict_id=body.conflict_id, resolved=True
             )

@@ -93,6 +93,40 @@ class CSLItem(BaseModel):
         )
 
     @classmethod
+    def from_openalex(cls, item_id: str, work: dict) -> CSLItem:
+        """Build a CSLItem from an OpenAlex ``works`` result object."""
+        authors: list[CSLName] = []
+        for authorship in work.get("authorships", []) or []:
+            name = (authorship.get("author") or {}).get("display_name", "")
+            if name:
+                parts = name.split()
+                authors.append(
+                    CSLName(family=parts[-1], given=" ".join(parts[:-1]))
+                )
+        doi = str(work.get("doi") or "")
+        if doi.startswith("https://doi.org/"):
+            doi = doi[len("https://doi.org/") :]
+        host = work.get("host_venue") or work.get("primary_location") or {}
+        container = host.get("display_name") or (host.get("source") or {}).get(
+            "display_name", ""
+        )
+        biblio = work.get("biblio") or {}
+        return cls(
+            id=item_id,
+            type=work.get("type", "article-journal"),
+            author=authors,
+            issued_year=work.get("publication_year"),
+            title=str(work.get("title") or work.get("display_name") or ""),
+            container_title=str(container or ""),
+            volume=str(biblio.get("volume", "") or ""),
+            issue=str(biblio.get("issue", "") or ""),
+            page="-".join(
+                p for p in (biblio.get("first_page"), biblio.get("last_page")) if p
+            ),
+            doi=doi.lower(),
+        )
+
+    @classmethod
     def from_csl_json(cls, item_id: str, msg: dict) -> CSLItem:
         """Build a CSLItem from DOI content-negotiation CSL JSON."""
         authors = [
