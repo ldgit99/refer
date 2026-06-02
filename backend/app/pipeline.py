@@ -10,6 +10,7 @@ from __future__ import annotations
 from app.citation.extractor import extract_citations
 from app.citation.matcher import MatchReport, match
 from app.citation.references import parse_references
+from app.citation.style import detect_citation_style
 from app.parsers.base import ParsedDocument
 from app.parsers.docx_parser import parse_docx
 
@@ -45,7 +46,8 @@ def review_document(document: ParsedDocument) -> MatchReport:
     """F1-only review (kept for the M1 regression baseline)."""
     citations = extract_citations(document)
     references = parse_references(document.references_section)
-    return match(citations, references)
+    style_profile = detect_citation_style(citations, references)
+    return match(citations, references, style_profile=style_profile)
 
 
 def review_file(data: bytes, filename: str) -> MatchReport:

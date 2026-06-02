@@ -162,6 +162,8 @@ def _split_entries(section: str) -> list[str]:
         for ln in lines:
             if _NUMBERED_PREFIX_RE.match(ln):
                 entries.append(ln)
+            elif _starts_reference_entry(ln):
+                entries.append(ln)
             elif entries:
                 entries[-1] += " " + ln.strip()
             else:

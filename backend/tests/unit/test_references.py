@@ -141,3 +141,19 @@ def test_numbered_discussion_section_is_not_a_reference() -> None:
 
     assert len(refs) == 2
     assert all("Discussion and Conclusion" not in ref.raw for ref in refs)
+
+
+def test_mixed_numbered_and_apa_references_do_not_merge() -> None:
+    refs = parse_references(
+        "\n".join(
+            [
+                "[1] A. Author, Title one, 2019.",
+                "Kim, S. (2024). A study of things. Journal, 1(1), 1-2.",
+            ]
+        )
+    )
+
+    assert len(refs) == 2
+    assert refs[0].number == 1
+    assert refs[1].authors == ["Kim"]
+    assert "Kim, S." not in refs[0].raw
